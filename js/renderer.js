@@ -22,7 +22,7 @@ function drawPolygon(ctx, x1, y1, x2, y2, x3, y3, x4, y4, color) {
   ctx.fill();
 }
 
-export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
+export function render(ctx, w, h, posX, posZ, speed, isOffRoad) {
   // Sky
   ctx.fillStyle = "#87CEEB";
   ctx.fillRect(0, 0, w, h);
@@ -40,45 +40,33 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
   let maxy = h;
   let prevProjected = null;
 
-  // Determine iteration direction so the track doesn't vanish when looking backward
-  const dir = Math.cos(heading) >= 0 ? 1 : -1;
+  // Render loop strictly looks forward along the Z-axis
+  for (let i = 0; i < DRAW_DIST; i++) {
+    const index = startPos + i;
 
-  for (let i = -10; i < DRAW_DIST; i++) {
-    const index = startPos + i * dir;
-    if (index < 0) continue;
-
-    // 1. Get World Coordinates of segment
+    // 1. Get World Coordinates
     const worldX = getTrackX(index);
-    const worldZ = index * SEG_LEN;
     const worldY = getTrackY(index);
+    const worldZ = index * SEG_LEN;
 
     // 2. Translate relative to Camera
     const relX = worldX - posX;
-    const relZ = worldZ - posZ;
     const relY = absCamY - worldY;
+    const relZ = worldZ - posZ; // Depth
 
-    // 3. Rotate coordinates based on Camera Heading (Fixed sign logic)
-    const cosH = Math.cos(heading);
-    const sinH = Math.sin(heading);
+    // 3. Project to Screen (if in front of camera)
+    if (relZ <= 1) continue;
 
-    const rotX = relX * cosH - relZ * sinH;
-    const rotZ = relX * sinH + relZ * cosH;
-
-    // 4. Project if in front of camera
-    if (rotZ <= 1) {
-      prevProjected = null; // Reset segment chain if it goes behind us
-      continue;
-    }
-
-    const scale = fovMult / rotZ;
-    const px = w / 2 + rotX * scale;
+    const scale = fovMult / relZ;
+    const px = w / 2 + relX * scale;
     const py = h / 2 + relY * scale;
     const pw = ROAD_WIDTH * scale;
 
+    // 4. Draw if segment is on screen and not blocked by a nearer hill
     if (prevProjected && py < maxy) {
       const c = getColors(index);
 
-      // Save canvas state and clip to maxy to prevent valleys drawing over hills
+      // Clip canvas to maxy horizon line
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, 0, w, maxy);
@@ -102,8 +90,7 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
         c.road,
       );
 
-      ctx.restore(); // Remove clipping region for the next segment
-
+      ctx.restore();
       maxy = py;
     }
 

@@ -10,10 +10,9 @@ export class Game {
     this.ctx = canvas.getContext("2d");
     this.input = new InputHandler();
 
-    // --- World State (360-degree capable) ---
-    this.posX = 0; // Absolute X in world space
-    this.posZ = 0; // Absolute Z in world space
-    this.heading = 0; // Direction in radians (0 = Forward/North)
+    // --- Arcade World State ---
+    this.posX = 0; // Lateral position (left/right of the road)
+    this.posZ = 0; // Forward progress down the track
     this.speed = 0;
 
     this._lastTime = 0;
@@ -48,37 +47,45 @@ export class Game {
   }
 
   _update(dt) {
-    // 1. Handle Rotation (Turning the car literally around)
-    // Adjust 2.5 to make the steering more or less sensitive
-    const turnSpeed = 2.5;
-    this.heading += this.input.steer * turnSpeed * dt;
-
-    // 2. Physics & Movement
+    // 1. Physics & Speed
     const targetSpeed = this.input.isBraking ? 0 : MAX_SPEED;
     this.speed += (targetSpeed - this.speed) * dt * 2.5;
 
-    // Move along the velocity vector based on current heading
-    this.posX += Math.sin(this.heading) * this.speed * dt;
-    this.posZ += Math.cos(this.heading) * this.speed * dt;
+    // You ALWAYS move forward down the Z-axis
+    this.posZ += this.speed * dt;
 
-    // 3. Track Logic
-    // Find the track segment closest to our current Z position
+    // 2. Track & Steering Logic
     const startPos = Math.floor(this.posZ / SEG_LEN);
-    const roadX = getTrackX(startPos);
+    const currentTrackX = getTrackX(startPos);
+    const nextTrackX = getTrackX(startPos + 1);
 
-    // Check if player is beyond the road width
-    this._isOffRoad = Math.abs(this.posX - roadX) > ROAD_WIDTH;
+    // Calculate how sharp the upcoming curve is
+    const curve = nextTrackX - currentTrackX;
+
+    // Steering slides you left and right horizontally
+    const turnSpeed = 10000;
+    this.posX += this.input.steer * turnSpeed * dt;
+
+    // Centrifugal force: sharp curves push you to the outside of the track based on speed
+    const centrifugal = curve * (this.speed / MAX_SPEED) * 2.0;
+    this.posX -= centrifugal;
+
+    // 3. Off-road logic (Check distance from absolute track center)
+    this._isOffRoad = Math.abs(this.posX - currentTrackX) > ROAD_WIDTH;
+
+    if (this._isOffRoad && this.speed > 2000) {
+      this.speed -= 4000 * dt; // Heavy friction when driving on the grass
+    }
   }
 
   _draw() {
-    // Pass the new coordinates and heading to the 360 renderer
+    // Pass the simplified data to the renderer
     render(
       this.ctx,
       this.w,
       this.h,
-      this.posX, // Updated
-      this.posZ, // Updated
-      this.heading, // Updated
+      this.posX,
+      this.posZ,
       this.speed,
       this._isOffRoad,
     );
