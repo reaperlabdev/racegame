@@ -27,17 +27,24 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
   ctx.fillStyle = "#87CEEB";
   ctx.fillRect(0, 0, w, h);
 
+  // Smooth out camera elevation by interpolating between segments
   const startPos = Math.floor(posZ / SEG_LEN);
+  const percent = (posZ - startPos * SEG_LEN) / SEG_LEN;
+  const startY = getTrackY(startPos);
+  const endY = getTrackY(startPos + 1);
+  const camTrackY = startY + (endY - startY) * percent;
+  const absCamY = camTrackY + CAM_Y;
+
   const fovMult = Math.min(w, h) * 0.9;
-  const absCamY = getTrackY(startPos) + CAM_Y;
 
   let maxy = h;
   let prevProjected = null;
 
-  // Draw segments in front of AND behind to allow looking around
-  // We search a range of segments around the player
+  // Determine iteration direction so the track doesn't vanish when looking backward
+  const dir = Math.cos(heading) >= 0 ? 1 : -1;
+
   for (let i = -10; i < DRAW_DIST; i++) {
-    const index = startPos + i;
+    const index = startPos + i * dir;
     if (index < 0) continue;
 
     // 1. Get World Coordinates of segment
@@ -50,10 +57,9 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
     const relZ = worldZ - posZ;
     const relY = absCamY - worldY;
 
-    // 3. Rotate coordinates based on Camera Heading
-    // Standard 2D rotation formula:
-    const cosH = Math.cos(-heading);
-    const sinH = Math.sin(-heading);
+    // 3. Rotate coordinates based on Camera Heading (Fixed sign logic)
+    const cosH = Math.cos(heading);
+    const sinH = Math.sin(heading);
 
     const rotX = relX * cosH - relZ * sinH;
     const rotZ = relX * sinH + relZ * cosH;
@@ -72,6 +78,12 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
     if (prevProjected && py < maxy) {
       const c = getColors(index);
 
+      // Save canvas state and clip to maxy to prevent valleys drawing over hills
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, w, maxy);
+      ctx.clip();
+
       // Draw Grass
       ctx.fillStyle = c.grass;
       ctx.fillRect(0, py, w, prevProjected.y - py);
@@ -89,6 +101,8 @@ export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
         py,
         c.road,
       );
+
+      ctx.restore(); // Remove clipping region for the next segment
 
       maxy = py;
     }
