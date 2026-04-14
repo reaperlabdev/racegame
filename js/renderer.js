@@ -22,108 +22,77 @@ function drawPolygon(ctx, x1, y1, x2, y2, x3, y3, x4, y4, color) {
   ctx.fill();
 }
 
-/**
- * Draws one complete frame.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w  Canvas width
- * @param {number} h  Canvas height
- * @param {number} camZ  Distance travelled (world units)
- * @param {number} camX  Horizontal camera position
- * @param {number} speed Current speed
- * @param {boolean} isOffRoad  Whether the player is off-road
- * @param {number} camYaw  Smoothed steering yaw (-1 … 1)
- */
-// input.js — Keyboard, gyroscope, and touch input
+export function render(ctx, w, h, posX, posZ, heading, speed, isOffRoad) {
+  // Sky
+  ctx.fillStyle = "#87CEEB";
+  ctx.fillRect(0, 0, w, h);
 
-export class InputHandler {
-  constructor() {
-    this.steer = 0; // -1 (left) … 0 … 1 (right)
-    this.isBraking = false;
-    this.usingGyro = false;
+  const startPos = Math.floor(posZ / SEG_LEN);
+  const fovMult = Math.min(w, h) * 0.9;
+  const absCamY = getTrackY(startPos) + CAM_Y;
 
-    this._keys = {};
-    this._bindKeyboard();
-    this._bindTouch();
-  }
+  let maxy = h;
+  let prevProjected = null;
 
-  // ─── Gyroscope ────────────────────────────────────────────────────────────
+  // Draw segments in front of AND behind to allow looking around
+  // We search a range of segments around the player
+  for (let i = -10; i < DRAW_DIST; i++) {
+    const index = startPos + i;
+    if (index < 0) continue;
 
-  /**
-   * Call once after user interaction to request permission (required on iOS 13+)
-   * and start listening to device orientation.
-   */
-  enableGyro() {
-    if (
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function"
-    ) {
-      DeviceOrientationEvent.requestPermission()
-        .then((state) => {
-          if (state === "granted") {
-            window.addEventListener("deviceorientation", (e) =>
-              this._handleOrientation(e),
-            );
-          }
-        })
-        .catch(console.error);
-    } else {
-      window.addEventListener("deviceorientation", (e) =>
-        this._handleOrientation(e),
+    // 1. Get World Coordinates of segment
+    const worldX = getTrackX(index);
+    const worldZ = index * SEG_LEN;
+    const worldY = getTrackY(index);
+
+    // 2. Translate relative to Camera
+    const relX = worldX - posX;
+    const relZ = worldZ - posZ;
+    const relY = absCamY - worldY;
+
+    // 3. Rotate coordinates based on Camera Heading
+    // Standard 2D rotation formula:
+    const cosH = Math.cos(-heading);
+    const sinH = Math.sin(-heading);
+
+    const rotX = relX * cosH - relZ * sinH;
+    const rotZ = relX * sinH + relZ * cosH;
+
+    // 4. Project if in front of camera
+    if (rotZ <= 1) {
+      prevProjected = null; // Reset segment chain if it goes behind us
+      continue;
+    }
+
+    const scale = fovMult / rotZ;
+    const px = w / 2 + rotX * scale;
+    const py = h / 2 + relY * scale;
+    const pw = ROAD_WIDTH * scale;
+
+    if (prevProjected && py < maxy) {
+      const c = getColors(index);
+
+      // Draw Grass
+      ctx.fillStyle = c.grass;
+      ctx.fillRect(0, py, w, prevProjected.y - py);
+
+      // Draw Road
+      drawPolygon(
+        ctx,
+        prevProjected.x - prevProjected.w,
+        prevProjected.y,
+        prevProjected.x + prevProjected.w,
+        prevProjected.y,
+        px + pw,
+        py,
+        px - pw,
+        py,
+        c.road,
       );
-    }
-  }
 
-  _handleOrientation(e) {
-    const isLandscape = window.innerWidth > window.innerHeight;
-    let tilt = isLandscape ? e.beta : e.gamma;
-    if (tilt === null) return;
-
-    this.usingGyro = true;
-
-    // Correct for upside-down landscape (270°)
-    if (isLandscape && screen.orientation && screen.orientation.angle === 270) {
-      tilt = -tilt;
+      maxy = py;
     }
 
-    // Dead-zone to suppress micro-wobble
-    if (Math.abs(tilt) < 3) tilt = 0;
-
-    tilt = Math.max(-45, Math.min(45, tilt));
-    this.steer = Math.max(-1, Math.min(1, tilt / 30));
-  }
-
-  // ─── Keyboard (desktop fallback) ─────────────────────────────────────────
-
-  _bindKeyboard() {
-    window.addEventListener("keydown", (e) => {
-      this._keys[e.key] = true;
-      if (e.key === "ArrowLeft") this.steer = -1;
-      if (e.key === "ArrowRight") this.steer = 1;
-      if (e.key === "ArrowDown") this.isBraking = true;
-    });
-
-    window.addEventListener("keyup", (e) => {
-      this._keys[e.key] = false;
-      if (
-        (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
-        !this.usingGyro
-      ) {
-        this.steer = 0;
-      }
-      if (e.key === "ArrowDown") this.isBraking = false;
-    });
-  }
-
-  // ─── Touch (brake on tap/hold) ────────────────────────────────────────────
-
-  _bindTouch() {
-    window.addEventListener("touchstart", () => {
-      // Only brake after the game is running; the game module checks this
-      this.isBraking = true;
-    });
-    window.addEventListener("touchend", () => {
-      this.isBraking = false;
-    });
+    prevProjected = { x: px, y: py, w: pw };
   }
 }

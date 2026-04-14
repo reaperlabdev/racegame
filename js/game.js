@@ -1,10 +1,8 @@
-// game.js — Game loop and physics
-
 import { getTrackX, SEG_LEN, ROAD_WIDTH } from "./track.js";
 import { render } from "./renderer.js";
 import { InputHandler } from "./input.js";
 
-const MAX_SPEED = 12000; // World units / second at full throttle
+const MAX_SPEED = 12000;
 
 export class Game {
   constructor(canvas) {
@@ -12,14 +10,15 @@ export class Game {
     this.ctx = canvas.getContext("2d");
     this.input = new InputHandler();
 
-    // World state
-    this.camZ = 0; // Distance travelled
-    this.camX = 0; // Horizontal position
-    this.speed = 0; // Current speed
-    this.camYaw = 0; // Smoothed camera rotation (-1…1), follows steer
+    // --- World State (360-degree capable) ---
+    this.posX = 0; // Absolute X in world space
+    this.posZ = 0; // Absolute Z in world space
+    this.heading = 0; // Direction in radians (0 = Forward/North)
+    this.speed = 0;
 
     this._lastTime = 0;
     this._running = false;
+    this._isOffRoad = false;
 
     this._resize();
     window.addEventListener("resize", () => this._resize());
@@ -30,7 +29,6 @@ export class Game {
     this.h = this.canvas.height = window.innerHeight;
   }
 
-  /** Start the game (call after user interaction so gyro permission can fire). */
   start() {
     this._running = true;
     this._lastTime = performance.now();
@@ -42,7 +40,7 @@ export class Game {
     if (!this._running) return;
     requestAnimationFrame((t) => this._loop(t));
 
-    const dt = Math.min((time - this._lastTime) / 1000, 0.05); // cap at 50 ms
+    const dt = Math.min((time - this._lastTime) / 1000, 0.05);
     this._lastTime = time;
 
     this._update(dt);
@@ -50,40 +48,39 @@ export class Game {
   }
 
   _update(dt) {
-    const startPos = Math.floor(this.camZ / SEG_LEN);
-    const roadCenterX = getTrackX(startPos);
+    // 1. Handle Rotation (Turning the car literally around)
+    // Adjust 2.5 to make the steering more or less sensitive
+    const turnSpeed = 2.5;
+    this.heading += this.input.steer * turnSpeed * dt;
 
-    const isOffRoad = Math.abs(this.camX - roadCenterX) > ROAD_WIDTH * 0.9;
-    const targetSpeed = this.input.isBraking
-      ? 0
-      : isOffRoad
-        ? MAX_SPEED * 0.3
-        : MAX_SPEED;
-
-    // Smooth acceleration / deceleration
+    // 2. Physics & Movement
+    const targetSpeed = this.input.isBraking ? 0 : MAX_SPEED;
     this.speed += (targetSpeed - this.speed) * dt * 2.5;
-    this.camZ += this.speed * dt;
 
-    // Lateral movement scales with current speed
-    this.camX += this.input.steer * 14000 * (this.speed / MAX_SPEED) * dt;
+    // Move along the velocity vector based on current heading
+    this.posX += Math.sin(this.heading) * this.speed * dt;
+    this.posZ += Math.cos(this.heading) * this.speed * dt;
 
-    // Smoothly rotate camera toward steer direction (lag makes it feel physical)
-    this.camYaw += (this.input.steer - this.camYaw) * dt * 4;
+    // 3. Track Logic
+    // Find the track segment closest to our current Z position
+    const startPos = Math.floor(this.posZ / SEG_LEN);
+    const roadX = getTrackX(startPos);
 
-    // Expose for renderer
-    this._isOffRoad = isOffRoad;
+    // Check if player is beyond the road width
+    this._isOffRoad = Math.abs(this.posX - roadX) > ROAD_WIDTH;
   }
 
   _draw() {
+    // Pass the new coordinates and heading to the 360 renderer
     render(
       this.ctx,
       this.w,
       this.h,
-      this.camZ,
-      this.camX,
+      this.posX, // Updated
+      this.posZ, // Updated
+      this.heading, // Updated
       this.speed,
       this._isOffRoad,
-      this.camYaw,
     );
   }
 }
