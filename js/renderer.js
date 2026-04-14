@@ -9,7 +9,7 @@ import {
   DRAW_DIST,
 } from "./track.js";
 
-const CAM_Y = 800; // Camera height above the road
+const CAM_Y = 1000; // Camera height above the road
 
 /** Fills a quad defined by four (x,y) pairs. */
 function drawPolygon(ctx, x1, y1, x2, y2, x3, y3, x4, y4, color) {
@@ -32,8 +32,9 @@ function drawPolygon(ctx, x1, y1, x2, y2, x3, y3, x4, y4, color) {
  * @param {number} camX  Horizontal camera position
  * @param {number} speed Current speed
  * @param {boolean} isOffRoad  Whether the player is off-road
+ * @param {number} camYaw  Smoothed steering yaw (-1 … 1)
  */
-export function render(ctx, w, h, camZ, camX, speed, isOffRoad) {
+export function render(ctx, w, h, camZ, camX, speed, isOffRoad, camYaw = 0) {
   // Sky
   ctx.fillStyle = "#87CEEB";
   ctx.fillRect(0, 0, w, h);
@@ -43,9 +44,23 @@ export function render(ctx, w, h, camZ, camX, speed, isOffRoad) {
   const fovMult = Math.min(w, h) * 0.9;
   const roadCenterX = getTrackX(startPos);
 
+  // How far the vanishing point shifts sideways when fully steered.
+  // Positive yaw → looking right → road appears to sweep left into frame.
+  const YAW_STRENGTH = w * 0.35;
+  const horizShift = camYaw * YAW_STRENGTH;
+
+  // Subtle canvas lean (roll) to reinforce the turning sensation
+  const ROLL_DEG = camYaw * 4; // max ±4°
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((ROLL_DEG * Math.PI) / 180);
+  ctx.translate(-w / 2, -h / 2);
+
   let maxy = h;
 
-  // Anchor the road to the bottom of the screen
+  // Anchor the road to the bottom of the screen.
+  // horizShift is NOT applied here — the car stays centred; only the
+  // vanishing point (far end of road) moves, creating the look-ahead effect.
   let prev = {
     x: w / 2 + (roadCenterX - camX) * (fovMult / 1),
     y: h,
@@ -57,12 +72,14 @@ export function render(ctx, w, h, camZ, camX, speed, isOffRoad) {
     const z = index * SEG_LEN - camZ;
     if (z < 1) continue;
 
+    // t goes 0 (near) → 1 (far horizon); the shift blends in with distance
+    const t = i / DRAW_DIST;
     const scale = fovMult / z;
-    const px = w / 2 + (getTrackX(index) - camX) * scale;
+    const px = w / 2 + horizShift * t + (getTrackX(index) - camX) * scale;
     const py = h / 2 + (absCamY - getTrackY(index)) * scale;
     const pw = ROAD_WIDTH * scale;
 
-    if (py >= maxy) continue; // Hidden behind a hill
+    if (py >= maxy) continue;
 
     const c = getColors(index);
 
@@ -70,7 +87,7 @@ export function render(ctx, w, h, camZ, camX, speed, isOffRoad) {
     ctx.fillStyle = c.grass;
     ctx.fillRect(0, py, w, prev.y - py);
 
-    // Rumble strips (slightly wider than road)
+    // Rumble strips
     drawPolygon(
       ctx,
       prev.x - prev.w * 1.1,
@@ -101,6 +118,8 @@ export function render(ctx, w, h, camZ, camX, speed, isOffRoad) {
     maxy = py;
     prev = { x: px, y: py, w: pw };
   }
+
+  ctx.restore(); // undo the roll transform before drawing HUD
 
   // HUD — speedometer
   const mph = Math.floor(speed / 100);
