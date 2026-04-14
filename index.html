@@ -1,291 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>First Person Gyro Racer</title>
-    <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #000; 
-            touch-action: none; /* Prevents pull-to-refresh on mobile */
-            user-select: none;
-            font-family: sans-serif;
-        }
-        canvas { display: block; }
-        
-        #startMenu {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            z-index: 10;
-        }
-        #startMenu h1 { margin-bottom: 10px; }
-        #startMenu p { margin-bottom: 30px; text-align: center; padding: 0 20px; }
-        #startBtn {
-            padding: 15px 40px;
-            font-size: 22px;
-            font-weight: bold;
-            cursor: pointer;
-            background: #228B22;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        #startBtn:active { background: #1a6b1a; transform: translateY(2px); }
-    </style>
-</head>
-<body>
-
-    <div id="startMenu">
-        <h1>Gyro Racer</h1>
-        <p>Tilt your phone to steer.<br>Tap and hold the screen to brake.</p>
-        <button id="startBtn">Start Game</button>
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
-
-    <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-        
-        let w = canvas.width = window.innerWidth;
-        let h = canvas.height = window.innerHeight;
-
-        // Resize handler
-        window.addEventListener("resize", () => {
-            w = canvas.width = window.innerWidth;
-            h = canvas.height = window.innerHeight;
-        });
-
-        // Game State Variables
-        let gameStarted = false;
-        let lastTime = 0;
-        
-        let camZ = 0;       // Distance traveled
-        let camX = 0;       // Horizontal position in the world
-        let speed = 0;      // Current speed
-        let steer = 0;      // Steering input (-1 to 1)
-        let isBraking = false;
-        let usingGyro = false;
-
-        // Constants
-        const segLen = 100;         // Length of a single track segment
-        const maxSpeed = 12000;     // Max forward speed
-        const roadWidth = 1400;     // Width of the track
-        const camY = 1000;          // Height of the camera above the road
-        const drawDist = 150;       // How many segments forward to draw
-
-        // --- Track Generation Math ---
-        // Algorithmic path generation for infinite tracks
-        function getTrackX(i) {
-            if (i < 20) return 0; // Start straight
-            let t = i - 20;
-            // Mix two sine waves to create weaving curves
-            return Math.sin(t * 0.015) * 4000 + Math.sin(t * 0.005) * 8000;
-        }
-
-        function getTrackY(i) {
-            if (i < 50) return 0; // Flat start
-            let t = i - 50;
-            // Rolling hills
-            return Math.sin(t * 0.02) * 1200 + Math.sin(t * 0.01) * 2500;
-        }
-
-        function getColors(i) {
-            // Alternate colors every 3 segments to create the illusion of speed
-            let n = Math.floor(i / 3) % 2;
-            return {
-                road: n ? '#555' : '#444',
-                rumble: n ? '#FFF' : '#E00',
-                grass: n ? '#228B22' : '#1e7b1e'
-            };
-        }
-
-        // --- Helper function to draw 3D projected polygons ---
-        function drawPolygon(x1, y1, x2, y2, x3, y3, x4, y4, color) {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.lineTo(x3, y3);
-            ctx.lineTo(x4, y4);
-            ctx.fill();
-        }
-
-        // --- Main Game Loop ---
-        function loop(time) {
-            if (!gameStarted) return;
-            requestAnimationFrame(loop);
-
-            let dt = (time - lastTime) / 1000 || 0;
-            lastTime = time;
-
-            // 1. Update Physics
-            let startPos = Math.floor(camZ / segLen);
-            let roadCenterX = getTrackX(startPos);
-            
-            // Off-road penalty
-            let isOffRoad = Math.abs(camX - roadCenterX) > roadWidth * 0.9;
-            let targetSpeed = isBraking ? 0 : (isOffRoad ? maxSpeed * 0.3 : maxSpeed);
-            
-            // Acceleration / Deceleration
-            speed += (targetSpeed - speed) * dt * 2.5;
-            camZ += speed * dt;
-
-            // Steering movement
-            camX += steer * 14000 * (speed / maxSpeed) * dt;
-
-            // 2. Clear Screen & Draw Sky
-            ctx.fillStyle = '#87CEEB';
-            ctx.fillRect(0, 0, w, h);
-
-            // 3. Render Track
-            let maxy = h;
-            let absCamY = getTrackY(startPos) + camY;
-            let fovMult = Math.min(w, h) * 0.9;
-            
-            // Fake a starting point right below the camera to anchor the road to the screen bottom
-            let prev = {
-                x: w / 2 + (roadCenterX - camX) * (fovMult / 1),
-                y: h,
-                w: roadWidth * (fovMult / 1)
-            };
-
-            for (let i = 0; i < drawDist; i++) {
-                let index = startPos + i;
-                let z = index * segLen - camZ;
-                if (z < 1) continue; // Skip geometry behind the camera
-
-                // Perspective projection math
-                let scale = fovMult / z; 
-                let px = w / 2 + (getTrackX(index) - camX) * scale;
-                let py = h / 2 + (absCamY - getTrackY(index)) * scale;
-                let pw = roadWidth * scale;
-
-                // Cull objects that are hidden behind hills (painter's algorithm implicitly handled)
-                if (py >= maxy) continue;
-
-                let c = getColors(index);
-
-                // Draw Grass Background block
-                ctx.fillStyle = c.grass;
-                ctx.fillRect(0, py, w, prev.y - py);
-
-                // Draw Rumble Strips (slightly wider than the road)
-                drawPolygon(
-                    prev.x - prev.w * 1.1, prev.y, 
-                    prev.x + prev.w * 1.1, prev.y, 
-                    px + pw * 1.1, py, 
-                    px - pw * 1.1, py, 
-                    c.rumble
-                );
-
-                // Draw Main Road
-                drawPolygon(
-                    prev.x - prev.w, prev.y, 
-                    prev.x + prev.w, prev.y, 
-                    px + pw, py, 
-                    px - pw, py, 
-                    c.road
-                );
-
-                maxy = py;
-                prev = { x: px, y: py, w: pw };
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>First Person Gyro Racer</title>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                background: #000;
+                touch-action: none; /* Prevents pull-to-refresh on mobile */
+                user-select: none;
+                font-family: sans-serif;
+            }
+            canvas {
+                display: block;
             }
 
-            // 4. Draw HUD (Speedometer)
-            let mph = Math.floor(speed / 100);
-            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-            ctx.fillRect(10, 10, 150, 50);
-            ctx.fillStyle = "white";
-            ctx.font = "bold 24px Arial";
-            ctx.fillText(mph + " MPH", 30, 43);
-            
-            // Warning text if off road
-            if (isOffRoad && speed > 500) {
-                ctx.fillStyle = "red";
-                ctx.textAlign = "center";
-                ctx.fillText("OFF ROAD!", w/2, h/4);
-                ctx.textAlign = "left";
+            #startMenu {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.85);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                z-index: 10;
             }
-        }
-
-        // --- Inputs ---
-        
-        // Gyroscope Handling
-        function handleOrientation(e) {
-            let isLandscape = w > h;
-            let tilt = isLandscape ? e.beta : e.gamma;
-            
-            if (tilt === null) return;
-            usingGyro = true;
-
-            // Handle inverted landscape
-            if (isLandscape && screen.orientation && screen.orientation.angle === 270) {
-                tilt = -tilt;
+            #startMenu h1 {
+                margin-bottom: 10px;
+            }
+            #startMenu p {
+                margin-bottom: 30px;
+                text-align: center;
+                padding: 0 20px;
             }
 
-            // Deadzone to stop micro-wobbles
-            if (Math.abs(tilt) < 3) tilt = 0;
-
-            tilt = Math.max(-45, Math.min(45, tilt));
-            steer = tilt / 30; // 30 degrees tilt equals maximum lock
-            steer = Math.max(-1, Math.min(1, steer));
-        }
-
-        // Fallback Keyboard Handling (Desktop)
-        let keys = {};
-        window.addEventListener('keydown', e => {
-            keys[e.key] = true;
-            if (e.key === 'ArrowLeft') steer = -1;
-            if (e.key === 'ArrowRight') steer = 1;
-            if (e.key === 'ArrowDown') isBraking = true;
-        });
-        window.addEventListener('keyup', e => {
-            keys[e.key] = false;
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                if (!usingGyro) steer = 0; 
+            #startBtn {
+                padding: 15px 40px;
+                font-size: 22px;
+                font-weight: bold;
+                cursor: pointer;
+                background: #228b22;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             }
-            if (e.key === 'ArrowDown') isBraking = false;
-        });
-
-        // Touch handling (Braking on mobile)
-        window.addEventListener('touchstart', (e) => {
-            if(gameStarted) isBraking = true;
-        });
-        window.addEventListener('touchend', () => isBraking = false);
-
-        // --- Start Menu ---
-        document.getElementById('startBtn').addEventListener('click', () => {
-            document.getElementById('startMenu').style.display = 'none';
-            gameStarted = true;
-
-            // iOS 13+ requires manual permission to read device orientation
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                        }
-                    })
-                    .catch(console.error);
-            } else {
-                // Non-iOS devices
-                window.addEventListener('deviceorientation', handleOrientation);
+            #startBtn:active {
+                background: #1a6b1a;
+                transform: translateY(2px);
             }
+        </style>
+    </head>
+    <body>
+        <div id="startMenu">
+            <h1>Gyro Racer</h1>
+            <p>
+                Tilt your phone to steer.<br />Tap and hold the screen to brake.
+            </p>
+            <button id="startBtn">Start Game</button>
+        </div>
 
-            lastTime = performance.now();
-            requestAnimationFrame(loop);
-        });
-    </script>
-</body>
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- type="module" enables ES module imports and defers execution automatically -->
+        <script type="module">
+            import { initUI } from "./js/ui.js";
+            initUI();
+        </script>
+    </body>
 </html>
