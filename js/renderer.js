@@ -34,107 +34,96 @@ function drawPolygon(ctx, x1, y1, x2, y2, x3, y3, x4, y4, color) {
  * @param {boolean} isOffRoad  Whether the player is off-road
  * @param {number} camYaw  Smoothed steering yaw (-1 … 1)
  */
-export function render(ctx, w, h, camZ, camX, speed, isOffRoad, camYaw = 0) {
-  // Sky
-  ctx.fillStyle = "#87CEEB";
-  ctx.fillRect(0, 0, w, h);
+// input.js — Keyboard, gyroscope, and touch input
 
-  const startPos = Math.floor(camZ / SEG_LEN);
-  const absCamY = getTrackY(startPos) + CAM_Y;
-  const fovMult = Math.min(w, h) * 0.9;
-  const roadCenterX = getTrackX(startPos);
+export class InputHandler {
+  constructor() {
+    this.steer = 0; // -1 (left) … 0 … 1 (right)
+    this.isBraking = false;
+    this.usingGyro = false;
 
-  // How far the vanishing point shifts sideways when fully steered.
-  // Positive yaw → looking right → road appears to sweep left into frame.
-  const YAW_STRENGTH = w * 0.35;
-  const horizShift = camYaw * YAW_STRENGTH;
-
-  // Subtle canvas lean (roll) to reinforce the turning sensation
-  const ROLL_DEG = camYaw * 4; // max ±4°
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate((ROLL_DEG * Math.PI) / 180);
-  ctx.translate(-w / 2, -h / 2);
-
-  let maxy = h;
-
-  // Anchor the road to the bottom of the screen.
-  // horizShift is NOT applied here — the car stays centred; only the
-  // vanishing point (far end of road) moves, creating the look-ahead effect.
-  let prev = {
-    x: w / 2 + (roadCenterX - camX) * (fovMult / 1),
-    y: h,
-    w: ROAD_WIDTH * (fovMult / 1),
-  };
-
-  for (let i = 0; i < DRAW_DIST; i++) {
-    const index = startPos + i;
-    const z = index * SEG_LEN - camZ;
-    if (z < 1) continue;
-
-    // t goes 0 (near) → 1 (far horizon); the shift blends in with distance
-    const t = i / DRAW_DIST;
-    const scale = fovMult / z;
-    const px = w / 2 + horizShift * t + (getTrackX(index) - camX) * scale;
-    const py = h / 2 + (absCamY - getTrackY(index)) * scale;
-    const pw = ROAD_WIDTH * scale;
-
-    if (py >= maxy) continue;
-
-    const c = getColors(index);
-
-    // Grass strip
-    ctx.fillStyle = c.grass;
-    ctx.fillRect(0, py, w, prev.y - py);
-
-    // Rumble strips
-    drawPolygon(
-      ctx,
-      prev.x - prev.w * 1.1,
-      prev.y,
-      prev.x + prev.w * 1.1,
-      prev.y,
-      px + pw * 1.1,
-      py,
-      px - pw * 1.1,
-      py,
-      c.rumble,
-    );
-
-    // Road surface
-    drawPolygon(
-      ctx,
-      prev.x - prev.w,
-      prev.y,
-      prev.x + prev.w,
-      prev.y,
-      px + pw,
-      py,
-      px - pw,
-      py,
-      c.road,
-    );
-
-    maxy = py;
-    prev = { x: px, y: py, w: pw };
+    this._keys = {};
+    this._bindKeyboard();
+    this._bindTouch();
   }
 
-  ctx.restore(); // undo the roll transform before drawing HUD
+  // ─── Gyroscope ────────────────────────────────────────────────────────────
 
-  // HUD — speedometer
-  const mph = Math.floor(speed / 100);
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(10, 10, 150, 50);
-  ctx.fillStyle = "white";
-  ctx.font = "bold 24px Arial";
-  ctx.textAlign = "left";
-  ctx.fillText(mph + " MPH", 30, 43);
+  /**
+   * Call once after user interaction to request permission (required on iOS 13+)
+   * and start listening to device orientation.
+   */
+  enableGyro() {
+    if (
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function"
+    ) {
+      DeviceOrientationEvent.requestPermission()
+        .then((state) => {
+          if (state === "granted") {
+            window.addEventListener("deviceorientation", (e) =>
+              this._handleOrientation(e),
+            );
+          }
+        })
+        .catch(console.error);
+    } else {
+      window.addEventListener("deviceorientation", (e) =>
+        this._handleOrientation(e),
+      );
+    }
+  }
 
-  // Off-road warning
-  if (isOffRoad && speed > 500) {
-    ctx.fillStyle = "red";
-    ctx.textAlign = "center";
-    ctx.fillText("OFF ROAD!", w / 2, h / 4);
-    ctx.textAlign = "left";
+  _handleOrientation(e) {
+    const isLandscape = window.innerWidth > window.innerHeight;
+    let tilt = isLandscape ? e.beta : e.gamma;
+    if (tilt === null) return;
+
+    this.usingGyro = true;
+
+    // Correct for upside-down landscape (270°)
+    if (isLandscape && screen.orientation && screen.orientation.angle === 270) {
+      tilt = -tilt;
+    }
+
+    // Dead-zone to suppress micro-wobble
+    if (Math.abs(tilt) < 3) tilt = 0;
+
+    tilt = Math.max(-45, Math.min(45, tilt));
+    this.steer = Math.max(-1, Math.min(1, tilt / 30));
+  }
+
+  // ─── Keyboard (desktop fallback) ─────────────────────────────────────────
+
+  _bindKeyboard() {
+    window.addEventListener("keydown", (e) => {
+      this._keys[e.key] = true;
+      if (e.key === "ArrowLeft") this.steer = -1;
+      if (e.key === "ArrowRight") this.steer = 1;
+      if (e.key === "ArrowDown") this.isBraking = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+      this._keys[e.key] = false;
+      if (
+        (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
+        !this.usingGyro
+      ) {
+        this.steer = 0;
+      }
+      if (e.key === "ArrowDown") this.isBraking = false;
+    });
+  }
+
+  // ─── Touch (brake on tap/hold) ────────────────────────────────────────────
+
+  _bindTouch() {
+    window.addEventListener("touchstart", () => {
+      // Only brake after the game is running; the game module checks this
+      this.isBraking = true;
+    });
+    window.addEventListener("touchend", () => {
+      this.isBraking = false;
+    });
   }
 }
