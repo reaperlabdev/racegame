@@ -1,11 +1,11 @@
-import { ClassCamera } from "./classCamera";
-import { ManagerEntity } from "./manager/managerEntity";
-import { ManagerMap } from "./manager/managerMap";
+import { Camera } from "./class/camera/classCamera.js";
+import { ManagerEntity } from "./manager/managerEntity.js";
+import { ManagerMap } from "./manager/managerMap.js";
 
 export class Game {
   static instance;
 
-  camera = new ClassCamera();
+  camera = new Camera();
   managerMap = new ManagerMap();
   managerEntity = new ManagerEntity();
 
@@ -13,6 +13,23 @@ export class Game {
 
   constructor() {
     Game.instance = this;
+
+    this.managerMap
+      .loadMap("././assets/map.json", "././assets/tileset.png")
+      .then(() => {
+        this.init();
+      });
+  }
+
+  init() {
+    this.loop();
+  }
+
+  loop() {
+    this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    this.update();
+    this.render();
+    requestAnimationFrame(() => this.loop());
   }
 
   update() {

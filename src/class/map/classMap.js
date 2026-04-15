@@ -1,4 +1,4 @@
-import { Tile } from "./Tile.js";
+import { Tile } from "../map/tile/tile.js";
 
 export class Map {
   constructor(mapData, tilesetImage) {
@@ -27,7 +27,8 @@ export class Map {
     for (let i = 0; i < data.length; i++) {
       const tileId = data[i];
 
-      if (tileId !== 0) { // Assuming 0 is empty air
+      if (tileId !== 0) {
+        // Assuming 0 is empty air
         // Calculate where this tile is located on the tileset image
         const sourceX = ((tileId - 1) % tilesPerRow) * this.tileSize;
         const sourceY = Math.floor((tileId - 1) / tilesPerRow) * this.tileSize;
@@ -35,7 +36,14 @@ export class Map {
         const x = col * this.tileSize;
         const y = row * this.tileSize;
 
-        const tile = new Tile(x, y, this.tileSize, this.tilesetImage, sourceX, sourceY);
+        const tile = new Tile(
+          x,
+          y,
+          this.tileSize,
+          this.tilesetImage,
+          sourceX,
+          sourceY,
+        );
         this.tiles.push(tile);
 
         // Render the tile immediately onto our off-screen cache context
