@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Tile Map Editor</title>
+        <style>
+            body {
+                margin: 0;
+                display: flex;
+                font-family: sans-serif;
+            }
+
+            #left {
+                width: 260px;
+                padding: 10px;
+                background: #1e1e1e;
+                color: white;
+            }
+
+            #canvas {
+                border: 1px solid #333;
+                image-rendering: pixelated;
+            }
+
+            button,
+            input {
+                width: 100%;
+                margin: 5px 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="left">
+            <h3>Map Editor</h3>
+
+            <input type="file" id="tilesetInput" />
+            <input
+                type="number"
+                id="gridW"
+                placeholder="Width (tiles)"
+                value="40"
+            />
+            <input
+                type="number"
+                id="gridH"
+                placeholder="Height (tiles)"
+                value="40"
+            />
+            <input
+                type="number"
+                id="tileSize"
+                placeholder="Tile Size"
+                value="16"
+            />
+
+            <input type="number" id="tileId" placeholder="Tile ID" value="1" />
+
+            <button onclick="createGrid()">Create Grid</button>
+            <button onclick="exportJSON()">Export JSON</button>
+
+            <textarea id="output" rows="10" style="width: 100%"></textarea>
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <script>
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            let map = [];
+            let width = 0;
+            let height = 0;
+            let tileSize = 16;
+
+            let tileset = null;
+
+            document.getElementById("tilesetInput").onchange = (e) => {
+                const file = e.target.files[0];
+                const img = new Image();
+                img.onload = () => (tileset = img);
+                img.src = URL.createObjectURL(file);
+            };
+
+            function createGrid() {
+                width = parseInt(document.getElementById("gridW").value);
+                height = parseInt(document.getElementById("gridH").value);
+                tileSize = parseInt(document.getElementById("tileSize").value);
+
+                canvas.width = width * tileSize;
+                canvas.height = height * tileSize;
+
+                map = new Array(width * height).fill(0);
+
+                draw();
+            }
+
+            canvas.addEventListener("click", (e) => {
+                const rect = canvas.getBoundingClientRect();
+
+                const x = Math.floor((e.clientX - rect.left) / tileSize);
+                const y = Math.floor((e.clientY - rect.top) / tileSize);
+
+                const index = y * width + x;
+
+                const id = parseInt(document.getElementById("tileId").value);
+
+                map[index] = id;
+
+                draw();
+            });
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const i = y * width + x;
+                        const id = map[i];
+
+                        if (id === 0) continue;
+
+                        if (tileset) {
+                            const tilesPerRow = Math.floor(
+                                tileset.width / tileSize,
+                            );
+
+                            const sx = ((id - 1) % tilesPerRow) * tileSize;
+                            const sy =
+                                Math.floor((id - 1) / tilesPerRow) * tileSize;
+
+                            ctx.drawImage(
+                                tileset,
+                                sx,
+                                sy,
+                                tileSize,
+                                tileSize,
+                                x * tileSize,
+                                y * tileSize,
+                                tileSize,
+                                tileSize,
+                            );
+                        } else {
+                            ctx.fillStyle = "white";
+                            ctx.fillRect(
+                                x * tileSize,
+                                y * tileSize,
+                                tileSize,
+                                tileSize,
+                            );
+                        }
+                    }
+                }
+            }
+
+            function exportJSON() {
+                const data = {
+                    width,
+                    height,
+                    tileSize,
+                    data: map,
+                };
+
+                document.getElementById("output").value = JSON.stringify(
+                    data,
+                    null,
+                    2,
+                );
+            }
+        </script>
+    </body>
+</html>

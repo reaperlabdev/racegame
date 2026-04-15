@@ -1,40 +1,41 @@
 import { Tile } from "../map/tile/tile.js";
 
 export class Map {
-  constructor(mapData, tilesetImage) {
+  constructor(mapData, tilesetImage = null) {
     this.mapData = mapData;
     this.tilesetImage = tilesetImage;
+
+    this.width = mapData.width;
+    this.height = mapData.height;
     this.tileSize = mapData.tileSize || 16;
+    this.data = mapData.data;
+
     this.tiles = [];
 
-    // 1. Create an off-screen canvas for caching
     this.cacheCanvas = document.createElement("canvas");
-    this.cacheCanvas.width = this.mapData.width * this.tileSize;
-    this.cacheCanvas.height = this.mapData.height * this.tileSize;
+    this.cacheCanvas.width = this.width * this.tileSize;
+    this.cacheCanvas.height = this.height * this.tileSize;
     this.cacheCtx = this.cacheCanvas.getContext("2d");
 
-    // 2. Build the map and render it to the cache once
     this.buildAndCacheMap();
   }
 
   buildAndCacheMap() {
-    const { width, data } = this.mapData;
-    const tilesPerRow = this.tilesetImage.width / this.tileSize;
+    const { width, height, data } = this;
 
-    let col = 0;
-    let row = 0;
+    const tilesPerRow = this.tilesetImage
+      ? Math.floor(this.tilesetImage.width / this.tileSize)
+      : 0;
 
-    for (let i = 0; i < data.length; i++) {
-      const tileId = data[i];
+    data.forEach((tileId, i) => {
+      if (tileId === 0) return;
 
-      if (tileId !== 0) {
-        // Assuming 0 is empty air
-        // Calculate where this tile is located on the tileset image
+      const x = (i % width) * this.tileSize;
+      const y = Math.floor(i / width) * this.tileSize;
+
+      if (this.tilesetImage) {
         const sourceX = ((tileId - 1) % tilesPerRow) * this.tileSize;
         const sourceY = Math.floor((tileId - 1) / tilesPerRow) * this.tileSize;
-
-        const x = col * this.tileSize;
-        const y = row * this.tileSize;
 
         const tile = new Tile(
           x,
@@ -44,30 +45,32 @@ export class Map {
           sourceX,
           sourceY,
         );
+
         this.tiles.push(tile);
-
-        // Render the tile immediately onto our off-screen cache context
         tile.render(this.cacheCtx);
+      } else {
+        this.cacheCtx.fillStyle = this.getDebugColor(tileId);
+        this.cacheCtx.fillRect(x, y, this.tileSize, this.tileSize);
       }
+    });
+  }
 
-      // Move to the next column/row
-      col++;
-      if (col >= width) {
-        col = 0;
-        row++;
-      }
-    }
+  getDebugColor(tileId) {
+    const colors = {
+      1: "#444",
+      2: "#2ecc71",
+      3: "#3498db",
+      4: "#e67e22",
+    };
+
+    return colors[tileId] || "#555";
   }
 
   update() {
-    // Only update tiles if they have dynamic behavior
-    for (const tile of this.tiles) {
-      tile.update();
-    }
+    this.tiles.forEach((tile) => tile.update());
   }
 
-  render(mainCtx, cameraX = 0, cameraY = 0) {
-    // PERFORMANCE BOOST: Draw the entire map in a single draw call!
-    mainCtx.drawImage(this.cacheCanvas, -cameraX, -cameraY);
+  render(ctx, cameraX = 0, cameraY = 0) {
+    ctx.drawImage(this.cacheCanvas, -cameraX, -cameraY);
   }
 }
