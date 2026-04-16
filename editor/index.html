@@ -1,172 +1,497 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <title>Tile Map Editor</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Pro Tile Map Editor v2.3 (16x16)</title>
         <style>
+            :root {
+                --bg: #121212;
+                --panel: #1e1e1e;
+                --text: #e0e0e0;
+                --accent: #2ecc71;
+                --border: #333;
+            }
             body {
                 margin: 0;
                 display: flex;
+                height: 100vh;
+                background-color: var(--bg);
+                color: var(--text);
                 font-family: sans-serif;
+                overflow: hidden;
             }
 
             #left {
-                width: 260px;
-                padding: 10px;
-                background: #1e1e1e;
+                width: 320px;
+                background: var(--panel);
+                border-right: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+                padding: 15px;
+                overflow-y: auto;
+            }
+            .control-group {
+                margin-bottom: 12px;
+            }
+            label {
+                font-size: 0.75rem;
+                color: #888;
+                display: block;
+                margin-bottom: 4px;
+            }
+
+            input,
+            button,
+            textarea {
+                background: #2a2a2a;
+                border: 1px solid var(--border);
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            .tool-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 5px;
+                margin-bottom: 10px;
+            }
+            .active-tool {
+                border: 2px solid var(--accent) !important;
+                background: #333;
+            }
+
+            button {
+                background: var(--accent);
+                color: #000;
+                font-weight: bold;
+                cursor: pointer;
+                border: none;
+                margin-top: 5px;
+            }
+            button.secondary {
+                background: #3498db;
+                color: white;
+            }
+            button.danger {
+                background: #e74c3c;
                 color: white;
             }
 
-            #canvas {
-                border: 1px solid #333;
+            #paletteContainer {
+                height: 150px;
+                background: #000;
+                border: 1px solid #444;
+                overflow: auto;
+                margin-top: 5px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            #paletteCanvas {
                 image-rendering: pixelated;
+                cursor: pointer;
+                border: 1px solid #555;
             }
 
-            button,
-            input {
-                width: 100%;
-                margin: 5px 0;
+            #workspace {
+                flex-grow: 1;
+                overflow: auto;
+                display: flex;
+                background: #111;
+            }
+            #canvas {
+                background: #000;
+                margin: auto;
+                image-rendering: pixelated;
+                border: 1px solid #444;
+            }
+            #output {
+                height: 60px;
+                font-size: 10px;
+                font-family: monospace;
             }
         </style>
     </head>
-
     <body>
         <div id="left">
-            <h3>Map Editor</h3>
+            <h3>Map Editor (16x16)</h3>
 
-            <input type="file" id="tilesetInput" />
-            <input
-                type="number"
-                id="gridW"
-                placeholder="Width (tiles)"
-                value="40"
-            />
-            <input
-                type="number"
-                id="gridH"
-                placeholder="Height (tiles)"
-                value="40"
-            />
-            <input
-                type="number"
-                id="tileSize"
-                placeholder="Tile Size"
-                value="16"
-            />
+            <div class="control-group">
+                <label>Tool Selection</label>
+                <div class="tool-grid">
+                    <button
+                        id="btnPencil"
+                        class="active-tool"
+                        onclick="setTool('pencil')"
+                    >
+                        Pencil
+                    </button>
+                    <button id="btnFill" onclick="setTool('fill')">Fill</button>
+                    <button id="btnLine" onclick="setTool('line')">Line</button>
+                    <button onclick="clearMap()" class="danger">Clear</button>
+                </div>
+            </div>
 
-            <input type="number" id="tileId" placeholder="Tile ID" value="1" />
+            <div class="control-group">
+                <label>1. Load Tilesheet (64x64 Total)</label>
+                <input type="file" id="tilesetInput" accept="image/png" />
+                <div style="display: flex; gap: 5px; margin-top: 5px">
+                    <input type="number" id="gridW" value="20" title="Width" />
+                    <input type="number" id="gridH" value="20" title="Height" />
+                </div>
+                <button onclick="createGrid()">New Grid</button>
+                <button onclick="upscaleMap()" class="secondary">
+                    Double Grid Size
+                </button>
+            </div>
 
-            <button onclick="createGrid()">Create Grid</button>
-            <button onclick="exportJSON()">Export JSON</button>
+            <div class="control-group">
+                <label>2. Select Tile (16x16 View)</label>
+                <div id="paletteContainer">
+                    <canvas id="paletteCanvas"></canvas>
+                </div>
+                <div
+                    id="selectedInfo"
+                    style="padding: 5px; font-size: 12px; color: var(--accent)"
+                >
+                    Selected ID: 1
+                </div>
+            </div>
 
-            <textarea id="output" rows="10" style="width: 100%"></textarea>
+            <div class="control-group">
+                <label>Import / Export</label>
+                <textarea
+                    id="output"
+                    placeholder="Paste JSON here..."
+                ></textarea>
+                <button onclick="importJSON()" class="secondary">Import</button>
+                <button onclick="exportJSON()">Export</button>
+            </div>
         </div>
 
-        <canvas id="canvas"></canvas>
+        <div id="workspace">
+            <canvas id="canvas"></canvas>
+        </div>
 
         <script>
             const canvas = document.getElementById("canvas");
             const ctx = canvas.getContext("2d");
+            const paletteCanvas = document.getElementById("paletteCanvas");
+            const pCtx = paletteCanvas.getContext("2d");
 
             let map = [];
-            let width = 0;
-            let height = 0;
-            let tileSize = 16;
+            let width = 20,
+                height = 20;
+            const sourceTileSize = 16; // THE FIX: Set to 16x16
+            const paletteScale = 2; // Visual zoom in palette
+            let tileSize = 32; // Visual size on the grid map
 
+            let selectedTileId = 1;
             let tileset = null;
+            let currentTool = "pencil";
+            let isDrawing = false;
+            let startX, startY;
+
+            function setTool(tool) {
+                currentTool = tool;
+                document
+                    .querySelectorAll(".tool-grid button")
+                    .forEach((b) => b.classList.remove("active-tool"));
+                document
+                    .getElementById(
+                        "btn" + tool.charAt(0).toUpperCase() + tool.slice(1),
+                    )
+                    .classList.add("active-tool");
+            }
 
             document.getElementById("tilesetInput").onchange = (e) => {
                 const file = e.target.files[0];
+                if (!file) return;
                 const img = new Image();
-                img.onload = () => (tileset = img);
+                img.onload = () => {
+                    tileset = img;
+                    drawPalette();
+                    draw();
+                };
                 img.src = URL.createObjectURL(file);
+            };
+
+            function drawPalette() {
+                if (!tileset) return;
+
+                paletteCanvas.width = tileset.width * paletteScale;
+                paletteCanvas.height = tileset.height * paletteScale;
+
+                pCtx.imageSmoothingEnabled = false;
+                pCtx.clearRect(0, 0, paletteCanvas.width, paletteCanvas.height);
+                pCtx.drawImage(
+                    tileset,
+                    0,
+                    0,
+                    tileset.width,
+                    tileset.height,
+                    0,
+                    0,
+                    paletteCanvas.width,
+                    paletteCanvas.height,
+                );
+
+                const tpr = Math.floor(tileset.width / sourceTileSize);
+                const sx =
+                    ((selectedTileId - 1) % tpr) *
+                    (sourceTileSize * paletteScale);
+                const sy =
+                    Math.floor((selectedTileId - 1) / tpr) *
+                    (sourceTileSize * paletteScale);
+
+                pCtx.strokeStyle = "cyan";
+                pCtx.lineWidth = 3;
+                pCtx.strokeRect(
+                    sx,
+                    sy,
+                    sourceTileSize * paletteScale,
+                    sourceTileSize * paletteScale,
+                );
+            }
+
+            paletteCanvas.onclick = (e) => {
+                if (!tileset) return;
+                const rect = paletteCanvas.getBoundingClientRect();
+
+                const x = Math.floor(
+                    (e.clientX - rect.left) / (sourceTileSize * paletteScale),
+                );
+                const y = Math.floor(
+                    (e.clientY - rect.top) / (sourceTileSize * paletteScale),
+                );
+
+                const tpr = Math.floor(tileset.width / sourceTileSize);
+                selectedTileId = y * tpr + x + 1;
+
+                document.getElementById("selectedInfo").innerText =
+                    `Selected ID: ${selectedTileId}`;
+                drawPalette();
             };
 
             function createGrid() {
                 width = parseInt(document.getElementById("gridW").value);
                 height = parseInt(document.getElementById("gridH").value);
-                tileSize = parseInt(document.getElementById("tileSize").value);
+                map = new Array(width * height).fill(0);
+                resizeCanvas();
+            }
 
+            function resizeCanvas() {
                 canvas.width = width * tileSize;
                 canvas.height = height * tileSize;
-
-                map = new Array(width * height).fill(0);
-
                 draw();
             }
 
-            canvas.addEventListener("click", (e) => {
-                const rect = canvas.getBoundingClientRect();
-
-                const x = Math.floor((e.clientX - rect.left) / tileSize);
-                const y = Math.floor((e.clientY - rect.top) / tileSize);
-
-                const index = y * width + x;
-
-                const id = parseInt(document.getElementById("tileId").value);
-
-                map[index] = id;
-
-                draw();
-            });
+            function upscaleMap() {
+                const newWidth = width * 2;
+                const newHeight = height * 2;
+                const newData = [];
+                for (let y = 0; y < height; y++) {
+                    let row = [];
+                    for (let x = 0; x < width; x++) {
+                        let tile = map[y * width + x];
+                        row.push(tile, tile);
+                    }
+                    newData.push(...row, ...row);
+                }
+                map = newData;
+                width = newWidth;
+                height = newHeight;
+                document.getElementById("gridW").value = width;
+                document.getElementById("gridH").value = height;
+                resizeCanvas();
+            }
 
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.imageSmoothingEnabled = false;
 
                 for (let y = 0; y < height; y++) {
                     for (let x = 0; x < width; x++) {
-                        const i = y * width + x;
-                        const id = map[i];
-
-                        if (id === 0) continue;
-
-                        if (tileset) {
-                            const tilesPerRow = Math.floor(
-                                tileset.width / tileSize,
+                        const id = map[y * width + x];
+                        if (id === 0) {
+                            // Optional: Draw light grid for empty spaces
+                            ctx.strokeStyle = "#1a1a1a";
+                            ctx.strokeRect(
+                                x * tileSize,
+                                y * tileSize,
+                                tileSize,
+                                tileSize,
                             );
-
-                            const sx = ((id - 1) % tilesPerRow) * tileSize;
+                            continue;
+                        }
+                        if (tileset) {
+                            const tpr = Math.floor(
+                                tileset.width / sourceTileSize,
+                            );
+                            const sx = ((id - 1) % tpr) * sourceTileSize;
                             const sy =
-                                Math.floor((id - 1) / tilesPerRow) * tileSize;
-
+                                Math.floor((id - 1) / tpr) * sourceTileSize;
                             ctx.drawImage(
                                 tileset,
                                 sx,
                                 sy,
-                                tileSize,
-                                tileSize,
+                                sourceTileSize,
+                                sourceTileSize,
                                 x * tileSize,
                                 y * tileSize,
                                 tileSize,
                                 tileSize,
                             );
                         } else {
-                            ctx.fillStyle = "white";
+                            ctx.fillStyle = "#444";
                             ctx.fillRect(
                                 x * tileSize,
                                 y * tileSize,
-                                tileSize,
-                                tileSize,
+                                tileSize - 1,
+                                tileSize - 1,
                             );
                         }
                     }
                 }
             }
 
+            // Interaction handlers
+            canvas.onmousedown = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor(
+                    (e.clientX - rect.left) / (rect.width / width),
+                );
+                const y = Math.floor(
+                    (e.clientY - rect.top) / (rect.height / height),
+                );
+                isDrawing = true;
+                startX = x;
+                startY = y;
+
+                if (currentTool === "fill") {
+                    floodFill(x, y, map[y * width + x], selectedTileId);
+                    draw();
+                } else if (currentTool === "pencil") {
+                    paint(e);
+                }
+            };
+
+            canvas.onmousemove = (e) => {
+                if (!isDrawing || currentTool !== "pencil") return;
+                paint(e);
+            };
+
+            window.onmouseup = (e) => {
+                if (!isDrawing) return;
+                if (currentTool === "line") {
+                    const rect = canvas.getBoundingClientRect();
+                    const endX = Math.floor(
+                        (e.clientX - rect.left) / (rect.width / width),
+                    );
+                    const endY = Math.floor(
+                        (e.clientY - rect.top) / (rect.height / height),
+                    );
+                    drawLine(startX, startY, endX, endY);
+                }
+                isDrawing = false;
+                draw();
+            };
+
+            function paint(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor(
+                    (e.clientX - rect.left) / (rect.width / width),
+                );
+                const y = Math.floor(
+                    (e.clientY - rect.top) / (rect.height / height),
+                );
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    // Right click or tool modifier can erase (set to 0)
+                    map[y * width + x] = e.buttons === 2 ? 0 : selectedTileId;
+                    draw();
+                }
+            }
+
+            function floodFill(x, y, target, replacement) {
+                if (
+                    target === replacement ||
+                    x < 0 ||
+                    x >= width ||
+                    y < 0 ||
+                    y >= height ||
+                    map[y * width + x] !== target
+                )
+                    return;
+                const stack = [[x, y]];
+                while (stack.length > 0) {
+                    const [cx, cy] = stack.pop();
+                    if (map[cy * width + cx] === target) {
+                        map[cy * width + cx] = replacement;
+                        if (cx + 1 < width) stack.push([cx + 1, cy]);
+                        if (cx - 1 >= 0) stack.push([cx - 1, cy]);
+                        if (cy + 1 < height) stack.push([cx, cy + 1]);
+                        if (cy - 1 >= 0) stack.push([cx, cy - 1]);
+                    }
+                }
+            }
+
+            function drawLine(x0, y0, x1, y1) {
+                let dx = Math.abs(x1 - x0),
+                    sx = x0 < x1 ? 1 : -1;
+                let dy = -Math.abs(y1 - y0),
+                    sy = y0 < y1 ? 1 : -1;
+                let err = dx + dy;
+                while (true) {
+                    if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height)
+                        map[y0 * width + x0] = selectedTileId;
+                    if (x0 === x1 && y0 === y1) break;
+                    let e2 = 2 * err;
+                    if (e2 >= dy) {
+                        err += dy;
+                        x0 += sx;
+                    }
+                    if (e2 <= dx) {
+                        err += dx;
+                        y0 += sy;
+                    }
+                }
+            }
+
             function exportJSON() {
-                const data = {
+                document.getElementById("output").value = JSON.stringify({
                     width,
                     height,
-                    tileSize,
                     data: map,
-                };
-
-                document.getElementById("output").value = JSON.stringify(
-                    data,
-                    null,
-                    2,
-                );
+                });
             }
+
+            function importJSON() {
+                try {
+                    const json = JSON.parse(
+                        document.getElementById("output").value,
+                    );
+                    width = json.width;
+                    height = json.height;
+                    map = json.data;
+                    document.getElementById("gridW").value = width;
+                    document.getElementById("gridH").value = height;
+                    resizeCanvas();
+                } catch (e) {
+                    alert("Invalid JSON");
+                }
+            }
+
+            function clearMap() {
+                if (confirm("Clear?")) {
+                    map.fill(0);
+                    draw();
+                }
+            }
+
+            createGrid();
         </script>
     </body>
 </html>

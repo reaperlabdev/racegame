@@ -22,12 +22,7 @@ export class Game {
 
     this.ctx.imageSmoothingEnabled = false;
 
-    const img = new Image();
-    img.src = "./assets/tilesheet.png";
-    img.onload = () => {
-      this.managerMap.generateMap(1280, 1280, img);
-      this.init();
-    };
+    this.managerMap.loadMap("./maps/level1.json", "./assets/tilesheet.png");
 
     this.camera.setPosition(320, 320);
 

@@ -58,6 +58,31 @@ export class Map {
     });
   }
 
+  getTileAt(worldX, worldY) {
+    // 1. Convert world pixels to grid coordinates
+    const gridX = Math.floor(worldX / this.tileSize);
+    const gridY = Math.floor(worldY / this.tileSize);
+
+    // 2. Boundary check (is the car even on the map?)
+    if (gridX < 0 || gridX >= this.width || gridY < 0 || gridY >= this.height) {
+      return { id: -1, x: 0, y: 0, size: this.tileSize }; // Out of bounds
+    }
+
+    // 3. Get the ID from your flat data array
+    const index = gridY * this.width + gridX;
+    const tileId = this.data[index];
+
+    // 4. Return everything needed for collision
+    return {
+      id: tileId,
+      gridX: gridX,
+      gridY: gridY,
+      worldX: gridX * this.tileSize,
+      worldY: gridY * this.tileSize,
+      size: this.tileSize,
+    };
+  }
+
   getDebugColor(tileId) {
     const colors = {
       1: "#444",
