@@ -21,10 +21,12 @@ export class Map {
   }
 
   buildAndCacheMap() {
-    const { width, height, data } = this;
+    const { width, data } = this;
 
+    // Define the size of the tiles in your original 64x64 PNG
+    const sourceTileSize = 16;
     const tilesPerRow = this.tilesetImage
-      ? Math.floor(this.tilesetImage.width / this.tileSize)
+      ? Math.floor(this.tilesetImage.width / sourceTileSize)
       : 0;
 
     data.forEach((tileId, i) => {
@@ -34,8 +36,8 @@ export class Map {
       const y = Math.floor(i / width) * this.tileSize;
 
       if (this.tilesetImage) {
-        const sourceX = ((tileId - 1) % tilesPerRow) * this.tileSize;
-        const sourceY = Math.floor((tileId - 1) / tilesPerRow) * this.tileSize;
+        const sourceX = ((tileId - 1) % tilesPerRow) * sourceTileSize;
+        const sourceY = Math.floor((tileId - 1) / tilesPerRow) * sourceTileSize;
 
         const tile = new Tile(
           x,
@@ -44,6 +46,7 @@ export class Map {
           this.tilesetImage,
           sourceX,
           sourceY,
+          sourceTileSize, // Pass the source size (32)
         );
 
         this.tiles.push(tile);

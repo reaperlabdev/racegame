@@ -31,7 +31,7 @@ export class ManagerMap {
   }
 
   generateMap(pixelWidth = 640, pixelHeight = 640, tilesetImage = null) {
-    const tileSize = 16;
+    const tileSize = 8;
 
     const width = Math.floor(pixelWidth / tileSize);
     const height = Math.floor(pixelHeight / tileSize);

@@ -20,6 +20,8 @@ export class Game {
   constructor() {
     Game.instance = this;
 
+    this.ctx.imageSmoothingEnabled = false;
+
     const img = new Image();
     img.src = "./assets/tilesheet.png";
     img.onload = () => {
