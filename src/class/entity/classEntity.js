@@ -1,10 +1,10 @@
-import { Game } from "../../game";
-
 export class Entity {
+  zIndex = 0;
   x = 0;
   y = 0;
   velX = 0;
   velY = 0;
+  destroyed = false;
 
   constructor(x, y) {
     this.x = x;
@@ -13,13 +13,7 @@ export class Entity {
     this.velY = 0;
   }
 
-  update(dt) {
-    this.x += this.velX * dt;
-    this.y += this.velY * dt;
-
-    this.velX *= 0.95;
-    this.velY *= 0.95;
-  }
+  update(dt) {}
 
   render(ctx) {}
 }

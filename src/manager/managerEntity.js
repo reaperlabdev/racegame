@@ -20,9 +20,11 @@ export class ManagerEntity {
 
   updateEntities(dt) {
     this.entities.forEach((entity) => entity.update(dt));
+    this.entities = this.entities.filter((entity) => !entity.destroyed);
   }
 
   renderEntities(ctx) {
-    this.entities.forEach((entity) => entity.render(ctx));
+    const sorted = [...this.entities].sort((a, b) => a.zIndex - b.zIndex);
+    sorted.forEach((entity) => entity.render(ctx));
   }
 }

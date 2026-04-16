@@ -10,9 +10,7 @@ export class Camera {
     this.y = y;
   }
 
-  update() {
-    this.rotation += 0.01;
-  }
+  update() {}
 
   setPosition(x, y) {
     this.x = x;
@@ -31,13 +29,12 @@ export class Camera {
   rotate(delta) {
     this.rotation += delta;
   }
-
   apply(ctx, canvas) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
 
-    ctx.rotate(this.rotation);
+    ctx.rotate(-this.rotation);
 
     ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.x, -this.y);
