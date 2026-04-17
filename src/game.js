@@ -23,8 +23,8 @@ export class Game {
     Game.instance = this;
 
     this.managerAudio = new ManagerAudio();
-    this.managerAudio.load("crash", "/sounds/crash.wav", { volume: 0.8 });
-    this.managerAudio.load("hit", "/sounds/hit.wav", { volume: 0.8 });
+    this.managerAudio.load("crash", "./sounds/crash.wav", { volume: 0.8 });
+    this.managerAudio.load("hit", "./sounds/hit.wav", { volume: 0.8 });
 
     this.ctx.imageSmoothingEnabled = false;
 

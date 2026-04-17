@@ -2,14 +2,6 @@ export class ManagerInput {
   constructor() {
     this.keys = {};
 
-    window.addEventListener(
-      "click",
-      () => {
-        Game.instance.input.initGyro();
-      },
-      { once: true },
-    );
-
     // keyboard
     window.addEventListener("keydown", (e) => {
       this.keys[e.code] = true;
@@ -19,49 +11,62 @@ export class ManagerInput {
       this.keys[e.code] = false;
     });
 
-    // gyro
-    this.roll = 0; // -1 (left) → 1 (right)
-    this.rawGamma = 0;
+    // touch state
+    this.touch = {
+      gas: false,
+      brake: false,
+    };
 
-    // iOS requires permission
+    this.roll = 0;
+
     this.initGyro();
+    this.initTouch();
   }
 
-  async initGyro() {
-    if (
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function"
-    ) {
-      try {
-        const permission = await DeviceOrientationEvent.requestPermission();
-        if (permission !== "granted") return;
-      } catch (e) {
-        return;
+  initTouch() {
+    window.addEventListener("touchstart", (e) => {
+      for (const t of e.touches) {
+        this.updateTouch(t.clientX, true);
       }
-    }
-
-    window.addEventListener("deviceorientation", (e) => {
-      if (e.gamma == null) return;
-
-      this.rawGamma = e.gamma;
-
-      // normalize gamma (-45 to 45 is typical comfortable tilt)
-      const maxTilt = 45;
-      let normalized = e.gamma / maxTilt;
-
-      // clamp to [-1, 1]
-      normalized = Math.max(-1, Math.min(1, normalized));
-
-      // smooth it (important)
-      this.roll += (normalized - this.roll) * 0.1;
     });
+
+    window.addEventListener("touchmove", (e) => {
+      for (const t of e.touches) {
+        this.updateTouch(t.clientX, true);
+      }
+    });
+
+    window.addEventListener("touchend", () => {
+      this.touch.gas = false;
+      this.touch.brake = false;
+    });
+  }
+
+  updateTouch(x, active) {
+    const width = window.innerWidth;
+
+    // left side = brake, right side = gas
+    if (x < width / 2) {
+      this.touch.brake = active;
+    } else {
+      this.touch.gas = active;
+    }
   }
 
   isPressed(code) {
     return !!this.keys[code];
   }
 
-  // helper for analog steering
+  isGas() {
+    return this.touch.gas || this.isPressed("KeyW");
+  }
+
+  isBrake() {
+    return (
+      this.touch.brake || this.isPressed("Space") || this.isPressed("KeyS")
+    );
+  }
+
   getRoll() {
     return this.roll;
   }
