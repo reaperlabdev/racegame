@@ -13,6 +13,15 @@ export class Entity {
     this.velY = 0;
   }
 
+  isCollidingWith(entity) {
+    return !(
+      this.x + this.width / 2 < entity.x - entity.width / 2 ||
+      this.x - this.width / 2 > entity.x + entity.width / 2 ||
+      this.y + this.height / 2 < entity.y - entity.height / 2 ||
+      this.y - this.height / 2 > entity.y + entity.height / 2
+    );
+  }
+
   update(dt) {}
 
   render(ctx) {}

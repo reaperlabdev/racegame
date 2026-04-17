@@ -1,8 +1,10 @@
 import { Camera } from "./class/camera/classCamera.js";
 import { EntityCar } from "./class/entity/car/entityCar.js";
+import { ManagerAudio } from "./manager/managerAudio.js";
 import { ManagerEntity } from "./manager/managerEntity.js";
 import { ManagerInput } from "./manager/managerInput.js";
 import { ManagerMap } from "./manager/managerMap.js";
+import { ManagerSpawner } from "./manager/managerSpawner.js";
 
 export class Game {
   static instance;
@@ -20,11 +22,18 @@ export class Game {
   constructor() {
     Game.instance = this;
 
+    this.managerAudio = new ManagerAudio();
+    this.managerAudio.load("crash", "/sounds/crash.wav", { volume: 0.8 });
+    this.managerAudio.load("hit", "/sounds/hit.wav", { volume: 0.8 });
+
     this.ctx.imageSmoothingEnabled = false;
 
     this.managerMap.loadMap("./maps/level1.json", "./assets/tilesheet.png");
 
     this.camera.setPosition(320, 320);
+    this.camera.setZoom(0.6);
+
+    this.copSpawner = new ManagerSpawner();
 
     console.log("init");
     this.init();
@@ -33,6 +42,7 @@ export class Game {
   init() {
     const car = new EntityCar();
     this.managerEntity.addEntity(car);
+
     console.log("add");
     requestAnimationFrame((t) => this.loop(t));
   }
@@ -52,6 +62,7 @@ export class Game {
   }
 
   update(dt) {
+    this.copSpawner.update(dt);
     this.camera.update(dt);
     this.managerMap.update(dt);
     this.managerEntity.updateEntities(dt);

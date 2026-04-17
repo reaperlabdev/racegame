@@ -11,37 +11,73 @@ export class EntityCar extends Entity {
   turnSpeed = 2.2;
   driftFactor = 0.92;
 
-  // Collision box dimensions
+  externalVelX = 0;
+  externalVelY = 0;
+
   width = 24;
   height = 16;
 
+  _spawnResolved = false;
+  _wasCollidingX = false;
+  _wasCollidingY = false;
+
   constructor() {
     super(320, 320);
+    this._spawnResolved = false;
+  }
+
+  resolveSpawnCollision() {
+    const map = Game.instance.managerMap?.maps?.[0];
+    if (!map) return;
+
+    if (!this.checkCollision(this.x, this.y, map)) return;
+
+    const step = 8;
+    for (let radius = step; radius < 512; radius += step) {
+      for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 16) {
+        const tx = this.x + Math.cos(angle) * radius;
+        const ty = this.y + Math.sin(angle) * radius;
+        if (!this.checkCollision(tx, ty, map)) {
+          this.x = tx;
+          this.y = ty;
+          return;
+        }
+      }
+    }
   }
 
   update(dt) {
-    const isBraking = Game.instance.input.isPressed("Space");
+    if (!this._spawnResolved) {
+      this.resolveSpawnCollision();
+    }
+
+    // CAMERA ZOOM BASED ON SPEED
+    const speedRatio = Math.abs(this.speed) / this.maxSpeed;
+    const targetZoom = 0.6 - speedRatio * 0.5;
+    Game.instance.camera.setZoom(
+      Game.instance.camera.zoom +
+        (targetZoom - Game.instance.camera.zoom) * 0.05,
+    );
+
+    const input = Game.instance.input;
+    const isBraking = input.isPressed("Space");
     const currentMap = Game.instance.managerMap.maps[0];
 
-    // 1. Get tile info at current position for surface effects
     let surfaceFriction = this.friction;
     let surfaceDrift = this.driftFactor;
 
     if (currentMap) {
       const currentTile = currentMap.getTileAt(this.x, this.y);
-      // Example: ID 2 is Grass (lower grip, more sliding)
       if (currentTile.id === 2) {
         surfaceFriction = 0.94;
         surfaceDrift = 0.97;
       }
     }
 
-    // 2. Calculate acceleration
+    // ACCELERATION
     if (!isBraking) {
-      if (Game.instance.input.isPressed("KeyW"))
-        this.speed += this.acceleration * dt;
-      else if (Game.instance.input.isPressed("KeyS"))
-        this.speed -= this.acceleration * dt;
+      if (input.isPressed("KeyW")) this.speed += this.acceleration * dt;
+      else if (input.isPressed("KeyS")) this.speed -= this.acceleration * dt;
     }
 
     let currentTurnSpeed = this.turnSpeed;
@@ -52,69 +88,100 @@ export class EntityCar extends Entity {
       this.speed *= 0.99;
     }
 
+    // 🔥 UNIFIED STEERING (keyboard + gyro)
+    let steer = 0;
+
+    if (input.isPressed("KeyA")) steer -= 1;
+    if (input.isPressed("KeyD")) steer += 1;
+
+    const rollRaw = input.getRoll?.() ?? 0;
+    const roll = Math.abs(rollRaw) < 0.05 ? 0 : rollRaw;
+
+    steer += roll;
+
+    steer = Math.max(-1, Math.min(1, steer));
+
     if (Math.abs(this.speed) > 5) {
       const direction = this.speed > 0 ? 1 : -1;
-      if (Game.instance.input.isPressed("KeyA"))
-        this.angle -= currentTurnSpeed * dt * direction;
-      if (Game.instance.input.isPressed("KeyD"))
-        this.angle += currentTurnSpeed * dt * direction;
+
+      // speed-based steering reduction (feels better at high speed)
+      const speedFactor = Math.min(1, Math.abs(this.speed) / this.maxSpeed);
+      const steerScale = 1 - speedFactor * 0.5;
+
+      if (isBraking) steer *= 1.3; // drift assist
+
+      this.angle += steer * currentTurnSpeed * steerScale * dt * direction;
     }
 
+    // APPLY FRICTION
     this.speed *= surfaceFriction;
 
-    // 3. Velocity and Collision Handling
+    // TARGET VELOCITY
     const targetVelX = Math.cos(this.angle) * this.speed;
     const targetVelY = Math.sin(this.angle) * this.speed;
 
+    // DRIFT BLENDING
     this.velX += (targetVelX - this.velX) * (1 - currentDrift);
     this.velY += (targetVelY - this.velY) * (1 - currentDrift);
 
-    // Tentative next positions
+    // EXTERNAL FORCES (collisions, etc.)
+    this.velX += this.externalVelX;
+    this.velY += this.externalVelY;
+
+    this.externalVelX *= 0.9;
+    this.externalVelY *= 0.9;
+
     const nextX = this.x + this.velX * dt;
     const nextY = this.y + this.velY * dt;
 
+    // COLLISION
     if (currentMap) {
-      // Check X movement
-      if (!this.checkCollision(nextX, this.y, currentMap)) {
+      const collidingX = this.checkCollision(nextX, this.y, currentMap);
+      if (collidingX) {
+        if (!this._wasCollidingX) {
+          const impact = Math.abs(this.velX) / this.maxSpeed;
+          Game.instance.camera.shake(10 * impact, 0.2);
+        }
+        this.speed *= -1;
+        this.velX *= -1;
+      } else {
         this.x = nextX;
-      } else {
-        this.speed *= -0.5; // Bounce
-        this.velX *= -0.5;
       }
+      this._wasCollidingX = collidingX;
 
-      // Check Y movement
-      if (!this.checkCollision(this.x, nextY, currentMap)) {
-        this.y = nextY;
+      const collidingY = this.checkCollision(this.x, nextY, currentMap);
+      if (collidingY) {
+        if (!this._wasCollidingY) {
+          const impact = Math.abs(this.velY) / this.maxSpeed;
+          Game.instance.camera.shake(10 * impact, 0.2);
+        }
+        this.speed *= -1;
+        this.velY *= -1;
       } else {
-        this.speed *= -0.5; // Bounce
-        this.velY *= -0.5;
+        this.y = nextY;
       }
-    } else {
-      this.x = nextX;
-      this.y = nextY;
+      this._wasCollidingY = collidingY;
     }
 
-    // --- SKIDMARK LOGIC ---
+    // SKIDMARKS
     const driftIntensity = Math.sqrt(
       (targetVelX - this.velX) ** 2 + (targetVelY - this.velY) ** 2,
     );
+
     if (isBraking || driftIntensity > 100) {
       this.spawnSkidmarks();
     }
 
+    // CAMERA FOLLOW
     Game.instance.camera.setPosition(this.x, this.y);
     Game.instance.camera.setRotation(this.angle + Math.PI / 2);
   }
 
-  /**
-   * Checks if any corner of the car hits a wall (ID 1)
-   */
   checkCollision(nx, ny, map) {
-    const margin = 2; // buffer
+    const margin = 2;
     const hw = this.width / 2 - margin;
     const hh = this.height / 2 - margin;
 
-    // Check four corners of the car's bounding box
     const corners = [
       { x: nx - hw, y: ny - hh },
       { x: nx + hw, y: ny - hh },
@@ -124,7 +191,7 @@ export class EntityCar extends Entity {
 
     for (const p of corners) {
       const tile = map.getTileAt(p.x, p.y);
-      if (tile.id === 1) return true; // Collision with Wall
+      if (tile.id === 1) return true;
     }
 
     return false;
@@ -141,7 +208,9 @@ export class EntityCar extends Entity {
     tires.forEach((tire) => {
       const rx = tire.x * Math.cos(this.angle) - tire.y * Math.sin(this.angle);
       const ry = tire.x * Math.sin(this.angle) + tire.y * Math.cos(this.angle);
+
       const mark = new EntitySkidmark(this.x + rx, this.y + ry, this.angle);
+
       Game.instance.managerEntity.addEntity(mark);
     });
   }
@@ -150,10 +219,13 @@ export class EntityCar extends Entity {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
+
     ctx.fillStyle = "red";
     ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     ctx.fillRect(4, -6, 4, 12);
+
     ctx.restore();
   }
 }
