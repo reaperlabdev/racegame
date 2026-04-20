@@ -8,22 +8,21 @@ export class ManagerInput {
     window.addEventListener("keyup", (e) => {
       this.keys[e.code] = false;
     });
-
     // Touch
     this.touch = { gas: false, brake: false };
-
     // Gyro
     this.roll = 0;
-    this._targetRoll = 0;
     this._gyroAttached = false;
     this._gyroHandler = null;
-
+    // Ready promise
+    this.ready = new Promise((resolve) => {
+      this._resolveReady = resolve;
+    });
     this._initTouchButtons();
     this._initGyro();
   }
 
-  // ─── TOUCH BUTTONS ───────────────────────────────────────────────────────────
-
+  // ─── TOUCH BUTTONS ──────────────────────────────────────────────────────────
   _initTouchButtons() {
     const attempt = () => {
       const gas = document.getElementById("gasBtn");
@@ -32,7 +31,6 @@ export class ManagerInput {
         setTimeout(attempt, 300);
         return;
       }
-
       this._bindBtn(gas, (v) => {
         this.touch.gas = v;
       });
@@ -57,8 +55,7 @@ export class ManagerInput {
     el.addEventListener("pointerleave", () => set(false));
   }
 
-  // ─── GYROSCOPE ───────────────────────────────────────────────────────────────
-
+  // ─── GYROSCOPE ──────────────────────────────────────────────────────────────
   _initGyro() {
     this._gyroHandler = (e) => {
       if (e.gamma == null) return;
@@ -75,10 +72,11 @@ export class ManagerInput {
     if (!isIOS) {
       window.addEventListener("deviceorientation", this._gyroHandler);
       this._gyroAttached = true;
+      this._resolveReady(); // ← non-iOS: ready immediately
       return;
     }
 
-    // iOS — retry until overlay exists
+    // iOS — wait for overlay tap, then request permission
     const attempt = () => {
       const overlay = document.getElementById("startOverlay");
       if (!overlay) {
@@ -101,6 +99,7 @@ export class ManagerInput {
             console.warn("[Input] Gyro permission error:", err);
           } finally {
             overlay.style.display = "none";
+            this._resolveReady(); // ← iOS: ready after tap (granted or denied)
           }
         },
         { once: true },
@@ -109,8 +108,7 @@ export class ManagerInput {
     attempt();
   }
 
-  // ─── PUBLIC API ───────────────────────────────────────────────────────────────
-
+  // ─── PUBLIC API ─────────────────────────────────────────────────────────────
   isPressed(code) {
     return !!this.keys[code];
   }
