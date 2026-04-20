@@ -60,7 +60,7 @@ export class EntityCar extends Entity {
 
     // CAMERA ZOOM
     const speedRatio = Math.abs(this.speed) / this.maxSpeed;
-    const targetZoom = 0.6 - speedRatio * 0.5;
+    const targetZoom = 2 - speedRatio * 1;
 
     Game.instance.camera.setZoom(
       Game.instance.camera.zoom +
@@ -79,13 +79,11 @@ export class EntityCar extends Entity {
       }
     }
 
-    // ACCELERATION (MOBILE + KEYBOARD)
     if (!isBrake) {
       if (isGas) {
         this.speed += this.acceleration * dt;
-      } else {
-        if (input.isPressed("KeyW")) this.speed += this.acceleration * dt;
-        else if (input.isPressed("KeyS")) this.speed -= this.acceleration * dt;
+      } else if (input.isPressed("KeyS")) {
+        this.speed -= this.acceleration * dt;
       }
     }
 

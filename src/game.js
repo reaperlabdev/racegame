@@ -34,7 +34,7 @@ export class Game {
     this.managerMap.loadMap("./maps/level1.json", "./assets/tilesheet.png");
 
     this.camera.setPosition(320, 320);
-    this.camera.setZoom(0.6);
+    this.camera.setZoom(2);
 
     this.copSpawner = new ManagerSpawner();
 
