@@ -12,14 +12,14 @@ export class ManagerInput {
     this.touch = { gas: false, brake: false };
     // Gyro
     this.roll = 0;
-    this._gyroAttached = false;
-    this._gyroHandler = null;
+    this._motionAttached = false;
+    this._motionHandler = null;
     // Ready promise
     this.ready = new Promise((resolve) => {
       this._resolveReady = resolve;
     });
     this._initTouchButtons();
-    this._initGyro();
+    this._initMotion();
   }
 
   // ─── TOUCH BUTTONS ──────────────────────────────────────────────────────────
@@ -55,28 +55,30 @@ export class ManagerInput {
     el.addEventListener("pointerleave", () => set(false));
   }
 
-  // ─── GYROSCOPE ──────────────────────────────────────────────────────────────
-  _initGyro() {
-    this._gyroHandler = (e) => {
-      if (e.gamma == null) return;
-      let v = e.gamma / 45;
+  // ─── MOTION ─────────────────────────────────────────────────────────────────
+  _initMotion() {
+    this._motionHandler = (e) => {
+      const x = e.accelerationIncludingGravity?.x;
+      if (x == null) return;
+      // ~±9.8 m/s² at full tilt — normalise to -1..1, dead zone in centre
+      let v = x / 9.8;
       v = Math.max(-1, Math.min(1, v));
       if (Math.abs(v) < 0.05) v = 0;
       this.roll = v;
     };
 
     const isIOS =
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function";
+      typeof DeviceMotionEvent !== "undefined" &&
+      typeof DeviceMotionEvent.requestPermission === "function";
 
     if (!isIOS) {
-      window.addEventListener("deviceorientation", this._gyroHandler);
-      this._gyroAttached = true;
-      this._resolveReady(); // ← non-iOS: ready immediately
+      window.addEventListener("devicemotion", this._motionHandler);
+      this._motionAttached = true;
+      this._resolveReady();
       return;
     }
 
-    // iOS — wait for overlay tap, then request permission
+    // iOS — needs a user gesture before requesting permission
     const attempt = () => {
       const overlay = document.getElementById("startOverlay");
       if (!overlay) {
@@ -88,18 +90,18 @@ export class ManagerInput {
         "pointerdown",
         async () => {
           try {
-            const result = await DeviceOrientationEvent.requestPermission();
+            const result = await DeviceMotionEvent.requestPermission();
             if (result === "granted") {
-              window.addEventListener("deviceorientation", this._gyroHandler);
-              this._gyroAttached = true;
+              window.addEventListener("devicemotion", this._motionHandler);
+              this._motionAttached = true;
             } else {
-              console.warn("[Input] Gyro permission denied");
+              console.warn("[Input] Motion permission denied");
             }
           } catch (err) {
-            console.warn("[Input] Gyro permission error:", err);
+            console.warn("[Input] Motion permission error:", err);
           } finally {
             overlay.style.display = "none";
-            this._resolveReady(); // ← iOS: ready after tap (granted or denied)
+            this._resolveReady();
           }
         },
         { once: true },
