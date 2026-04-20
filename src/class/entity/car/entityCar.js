@@ -79,11 +79,13 @@ export class EntityCar extends Entity {
       }
     }
 
+    // ACCELERATION (MOBILE + KEYBOARD)
     if (!isBrake) {
       if (isGas) {
         this.speed += this.acceleration * dt;
-      } else if (input.isPressed("KeyS")) {
-        this.speed -= this.acceleration * dt;
+      } else {
+        if (input.isPressed("KeyW")) this.speed += this.acceleration * dt;
+        else if (input.isPressed("KeyS")) this.speed -= this.acceleration * dt;
       }
     }
 

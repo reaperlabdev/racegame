@@ -1,5 +1,6 @@
 export class ManagerInput {
   constructor() {
+    // Keyboard
     this.keys = {};
     window.addEventListener("keydown", (e) => {
       this.keys[e.code] = true;
@@ -8,85 +9,104 @@ export class ManagerInput {
       this.keys[e.code] = false;
     });
 
+    // Touch
     this.touch = { gas: false, brake: false };
+
+    // Gyro
     this.roll = 0;
+    this._targetRoll = 0;
     this._gyroAttached = false;
+    this._gyroHandler = null;
 
-    this.initTouchButtons();
-    this.initGyro();
+    this._initTouchButtons();
+    this._initGyro();
   }
 
-  initTouchButtons() {
-    const bind = () => {
-      const gasBtn = document.getElementById("gasBtn");
-      const brakeBtn = document.getElementById("brakeBtn");
-      if (!gasBtn || !brakeBtn) return false;
+  // ─── TOUCH BUTTONS ───────────────────────────────────────────────────────────
 
-      const bindBtn = (el, set) => {
-        el.addEventListener("pointerdown", (e) => {
-          e.preventDefault();
-          set(true);
-        });
-        el.addEventListener("pointerup", (e) => {
-          e.preventDefault();
-          set(false);
-        });
-        el.addEventListener("pointercancel", () => set(false));
-        el.addEventListener("pointerleave", () => set(false));
-        el.style.touchAction = "none";
-      };
+  _initTouchButtons() {
+    const attempt = () => {
+      const gas = document.getElementById("gasBtn");
+      const brake = document.getElementById("brakeBtn");
+      if (!gas || !brake) {
+        setTimeout(attempt, 300);
+        return;
+      }
 
-      bindBtn(gasBtn, (v) => (this.touch.gas = v));
-      bindBtn(brakeBtn, (v) => (this.touch.brake = v));
-      return true;
+      this._bindBtn(gas, (v) => {
+        this.touch.gas = v;
+      });
+      this._bindBtn(brake, (v) => {
+        this.touch.brake = v;
+      });
     };
-
-    if (!bind()) setTimeout(() => bind(), 300);
+    attempt();
   }
 
-  initGyro() {
+  _bindBtn(el, set) {
+    el.style.touchAction = "none";
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      set(true);
+    });
+    el.addEventListener("pointerup", (e) => {
+      e.preventDefault();
+      set(false);
+    });
+    el.addEventListener("pointercancel", () => set(false));
+    el.addEventListener("pointerleave", () => set(false));
+  }
+
+  // ─── GYROSCOPE ───────────────────────────────────────────────────────────────
+
+  _initGyro() {
     this._gyroHandler = (e) => {
       if (e.gamma == null) return;
-      let normalized = Math.max(-1, Math.min(1, e.gamma / 45));
-      if (Math.abs(normalized) < 0.05) normalized = 0;
-      this.roll += (normalized - this.roll) * 0.1;
+      let v = e.gamma / 45;
+      v = Math.max(-1, Math.min(1, v));
+      if (Math.abs(v) < 0.05) v = 0;
+      this.roll = v; // direct, no smoothing
     };
 
-    // Android / desktop — no permission API, attach immediately
-    if (
-      typeof DeviceOrientationEvent === "undefined" ||
-      typeof DeviceOrientationEvent.requestPermission !== "function"
-    ) {
+    const isIOS =
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function";
+
+    if (!isIOS) {
+      // Android / desktop — attach straight away
       window.addEventListener("deviceorientation", this._gyroHandler);
       this._gyroAttached = true;
       return;
     }
 
-    // iOS — show overlay and request permission on tap
+    // iOS — need a user gesture to request permission
     const overlay = document.getElementById("startOverlay");
-    if (overlay) {
-      overlay.style.display = "flex";
-      overlay.addEventListener(
-        "pointerdown",
-        async () => {
-          try {
-            const res = await DeviceOrientationEvent.requestPermission();
-            if (res === "granted") {
-              window.addEventListener("deviceorientation", this._gyroHandler);
-              this._gyroAttached = true;
-            } else {
-              console.warn("Gyro permission denied by user");
-            }
-          } catch (e) {
-            console.warn("Gyro permission error:", e);
-          } finally {
-            overlay.style.display = "none";
+    if (!overlay) return;
+
+    overlay.style.display = "flex";
+
+    overlay.addEventListener(
+      "pointerdown",
+      async () => {
+        try {
+          const result = await DeviceOrientationEvent.requestPermission();
+          if (result === "granted") {
+            window.addEventListener("deviceorientation", this._gyroHandler);
+            this._gyroAttached = true;
+          } else {
+            console.warn("[Input] Gyro permission denied");
           }
-        },
-        { once: true },
-      );
-    }
+        } catch (err) {
+          console.warn("[Input] Gyro permission error:", err);
+        } finally {
+          overlay.style.display = "none";
+        }
+      },
+      { once: true },
+    );
   }
+
+  // ─── PUBLIC API ───────────────────────────────────────────────────────────────
 
   isPressed(code) {
     return !!this.keys[code];
