@@ -21,25 +21,18 @@ export class Game {
 
   constructor() {
     Game.instance = this;
-
     this.resize();
     window.addEventListener("resize", () => this.resize());
-
     this.managerAudio = new ManagerAudio();
     this.managerAudio.load("crash", "./sounds/crash.wav", { volume: 0.8 });
     this.managerAudio.load("hit", "./sounds/hit.wav", { volume: 0.8 });
-
     this.ctx.imageSmoothingEnabled = false;
-
     this.managerMap.loadMap("./maps/level1.json", "./assets/tilesheet.png");
-
     this.camera.setPosition(320, 320);
     this.camera.setZoom(2);
-
     this.copSpawner = new ManagerSpawner();
-
     console.log("init");
-    this.init();
+    this.input.ready.then(() => this.init());
   }
 
   resize() {
