@@ -22,6 +22,9 @@ export class Game {
   constructor() {
     Game.instance = this;
 
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+
     this.managerAudio = new ManagerAudio();
     this.managerAudio.load("crash", "./sounds/crash.wav", { volume: 0.8 });
     this.managerAudio.load("hit", "./sounds/hit.wav", { volume: 0.8 });
@@ -37,6 +40,15 @@ export class Game {
 
     console.log("init");
     this.init();
+  }
+
+  resize() {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    if (this.ctx) this.ctx.imageSmoothingEnabled = false;
+    if (this.camera) {
+      this.camera.setViewport(this.canvas.width, this.canvas.height);
+    }
   }
 
   init() {

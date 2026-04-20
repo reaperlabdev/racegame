@@ -42,6 +42,11 @@ export class Camera {
     this.zoom = zoom;
   }
 
+  setViewport(width, height) {
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+  }
+
   apply(ctx, canvas) {
     let ox = 0,
       oy = 0;

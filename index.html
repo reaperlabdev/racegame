@@ -3,7 +3,7 @@
     <head>
         <meta
             name="viewport"
-            content="width=device-width, initial-scale=1.0, user-scalable=no"
+            content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
         <title>racegame</title>
 
@@ -11,15 +11,13 @@
             body {
                 margin: 0;
                 overflow: hidden;
-                touch-action: none; /* 🔥 CRITICAL */
+                touch-action: none;
             }
-
             #gameCanvas {
                 width: 100vw;
                 height: 100vh;
                 display: block;
             }
-
             .ui {
                 position: fixed;
                 bottom: 20px;
@@ -28,8 +26,8 @@
                 justify-content: space-between;
                 padding: 0 20px;
                 z-index: 10;
+                box-sizing: border-box;
             }
-
             .btn {
                 width: 80px;
                 height: 80px;
@@ -43,6 +41,13 @@
                 -webkit-user-select: none;
                 touch-action: none;
             }
+
+            /* Hide touch buttons on PC */
+            @media (hover: hover) and (pointer: fine) {
+                .ui {
+                    display: none;
+                }
+            }
         </style>
     </head>
 
@@ -52,6 +57,25 @@
         <div class="ui">
             <div id="brakeBtn" class="btn">⟲</div>
             <div id="gasBtn" class="btn">⟰</div>
+        </div>
+
+        <div
+            id="startOverlay"
+            style="
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                font-size: 24px;
+                font-family: sans-serif;
+                align-items: center;
+                justify-content: center;
+                z-index: 100;
+                cursor: pointer;
+            "
+        >
+            Tap to Play
         </div>
 
         <script type="module" src="src/game.js"></script>
