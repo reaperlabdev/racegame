@@ -65,7 +65,7 @@ export class ManagerInput {
       let v = e.gamma / 45;
       v = Math.max(-1, Math.min(1, v));
       if (Math.abs(v) < 0.05) v = 0;
-      this.roll = v; // direct, no smoothing
+      this.roll = v;
     };
 
     const isIOS =
@@ -73,37 +73,40 @@ export class ManagerInput {
       typeof DeviceOrientationEvent.requestPermission === "function";
 
     if (!isIOS) {
-      // Android / desktop — attach straight away
       window.addEventListener("deviceorientation", this._gyroHandler);
       this._gyroAttached = true;
       return;
     }
 
-    // iOS — need a user gesture to request permission
-    const overlay = document.getElementById("startOverlay");
-    if (!overlay) return;
-
-    overlay.style.display = "flex";
-
-    overlay.addEventListener(
-      "pointerdown",
-      async () => {
-        try {
-          const result = await DeviceOrientationEvent.requestPermission();
-          if (result === "granted") {
-            window.addEventListener("deviceorientation", this._gyroHandler);
-            this._gyroAttached = true;
-          } else {
-            console.warn("[Input] Gyro permission denied");
+    // iOS — retry until overlay exists
+    const attempt = () => {
+      const overlay = document.getElementById("startOverlay");
+      if (!overlay) {
+        setTimeout(attempt, 300);
+        return;
+      }
+      overlay.style.display = "flex";
+      overlay.addEventListener(
+        "pointerdown",
+        async () => {
+          try {
+            const result = await DeviceOrientationEvent.requestPermission();
+            if (result === "granted") {
+              window.addEventListener("deviceorientation", this._gyroHandler);
+              this._gyroAttached = true;
+            } else {
+              console.warn("[Input] Gyro permission denied");
+            }
+          } catch (err) {
+            console.warn("[Input] Gyro permission error:", err);
+          } finally {
+            overlay.style.display = "none";
           }
-        } catch (err) {
-          console.warn("[Input] Gyro permission error:", err);
-        } finally {
-          overlay.style.display = "none";
-        }
-      },
-      { once: true },
-    );
+        },
+        { once: true },
+      );
+    };
+    attempt();
   }
 
   // ─── PUBLIC API ───────────────────────────────────────────────────────────────
