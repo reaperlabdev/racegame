@@ -49,21 +49,23 @@ export class Game {
     this.managerEntity.addEntity(car);
 
     console.log("add");
-    requestAnimationFrame((t) => this.loop(t));
+    requestAnimationFrame((t) => {
+      this.lastTime = t;
+      this.loop(t);
+    });
   }
 
-  loop() {
-    const currentTime = performance.now();
-    const dt = (currentTime - this.lastTime) / 1000;
-    this.lastTime = currentTime;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  loop(time) {
+    const dt = (time - this.lastTime) / 1000;
+    this.lastTime = time;
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.update(dt);
     this.render(this.ctx);
 
-    requestAnimationFrame(() => this.loop());
+    requestAnimationFrame((t) => this.loop(t));
   }
 
   update(dt) {

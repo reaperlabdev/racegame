@@ -8,61 +8,71 @@ export class ManagerInput {
     window.addEventListener("keyup", (e) => {
       this.keys[e.code] = false;
     });
+
     // Touch
     this.touch = { gas: false, brake: false };
+
     // Gyro
     this.roll = 0;
     this._motionAttached = false;
-    this._motionHandler = null;
+
     // Ready promise
     this.ready = new Promise((resolve) => {
       this._resolveReady = resolve;
     });
+
     this._initTouchButtons();
     this._initMotion();
   }
 
-  // ─── TOUCH BUTTONS ──────────────────────────────────────────────────────────
+  // ─── TOUCH BUTTONS ─────────────────────────────
   _initTouchButtons() {
     const attempt = () => {
       const gas = document.getElementById("gasBtn");
       const brake = document.getElementById("brakeBtn");
+
       if (!gas || !brake) {
         setTimeout(attempt, 300);
         return;
       }
-      this._bindBtn(gas, (v) => {
-        this.touch.gas = v;
-      });
-      this._bindBtn(brake, (v) => {
-        this.touch.brake = v;
-      });
+
+      this._bindBtn(gas, (v) => (this.touch.gas = v));
+      this._bindBtn(brake, (v) => (this.touch.brake = v));
     };
+
     attempt();
   }
 
   _bindBtn(el, set) {
     el.style.touchAction = "none";
+
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+      el.setPointerCapture(e.pointerId);
       set(true);
     });
+
     el.addEventListener("pointerup", (e) => {
       e.preventDefault();
+      el.releasePointerCapture(e.pointerId);
       set(false);
     });
+
     el.addEventListener("pointercancel", () => set(false));
-    el.addEventListener("pointerleave", () => set(false));
+    el.addEventListener("lostpointercapture", () => set(false));
   }
 
-  // ─── MOTION ─────────────────────────────────────────────────────────────────
+  // ─── MOTION ───────────────────────────────────
   _initMotion() {
     this._motionHandler = (e) => {
       const x = e.rotationRate?.gamma;
       if (x == null) return;
-      let v = x / 9.8;
+
+      let v = x / 10; // smoother scaling
       v = Math.max(-1, Math.min(1, v));
+
       if (Math.abs(v) < 0.05) v = 0;
+
       this.roll = v;
     };
 
@@ -77,50 +87,58 @@ export class ManagerInput {
       return;
     }
 
-    // iOS — needs a user gesture before requesting permission
+    // iOS permission
     const attempt = () => {
       const overlay = document.getElementById("startOverlay");
+
       if (!overlay) {
         setTimeout(attempt, 300);
         return;
       }
+
       overlay.style.display = "flex";
+
       overlay.addEventListener(
         "pointerdown",
         async () => {
           try {
             const result = await DeviceMotionEvent.requestPermission();
+
             if (result === "granted") {
               window.addEventListener("devicemotion", this._motionHandler);
               this._motionAttached = true;
             } else {
-              console.warn("[Input] Motion permission denied");
+              console.warn("Motion permission denied");
             }
           } catch (err) {
-            console.warn("[Input] Motion permission error:", err);
-          } finally {
-            overlay.style.display = "none";
-            this._resolveReady();
+            console.warn("Motion error:", err);
           }
+
+          overlay.style.display = "none";
+          this._resolveReady();
         },
         { once: true },
       );
     };
+
     attempt();
   }
 
-  // ─── PUBLIC API ─────────────────────────────────────────────────────────────
+  // ─── PUBLIC API ───────────────────────────────
   isPressed(code) {
     return !!this.keys[code];
   }
+
   isGas() {
     return this.touch.gas || this.isPressed("KeyW");
   }
+
   isBrake() {
     return (
       this.touch.brake || this.isPressed("Space") || this.isPressed("KeyS")
     );
   }
+
   getRoll() {
     return this.roll;
   }

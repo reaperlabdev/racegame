@@ -12,6 +12,7 @@
                 margin: 0;
                 overflow: hidden;
                 touch-action: none;
+                overscroll-behavior: none;
             }
             #gameCanvas {
                 width: 100vw;
@@ -42,7 +43,14 @@
                 touch-action: none;
             }
 
-            /* Hide touch buttons on PC */
+            .ui {
+                pointer-events: none;
+            }
+
+            .ui .btn {
+                pointer-events: auto;
+            }
+
             @media (hover: hover) and (pointer: fine) {
                 .ui {
                     display: none;
