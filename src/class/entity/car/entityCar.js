@@ -49,7 +49,6 @@ export class EntityCar extends Entity {
   update(dt) {
     if (!this._spawnResolved) {
       this.resolveSpawnCollision();
-      this._spawnResolved = true;
     }
 
     const input = Game.instance.input;

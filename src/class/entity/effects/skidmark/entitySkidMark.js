@@ -2,7 +2,7 @@ import { Entity } from "../../classEntity.js";
 
 export class EntitySkidmark extends Entity {
   alpha = 0.4;
-  lifeTime = 3;
+  lifeTime = 1;
 
   constructor(x, y, angle) {
     super(x, y);
