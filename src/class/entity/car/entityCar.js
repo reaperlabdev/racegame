@@ -242,7 +242,7 @@ export class EntityCar extends Entity {
     ctx.fillStyle = "rgba(255,255,255,0.7)";
     ctx.fillRect(4, -6, 4, 12);
 
-    ctx.fillText(Game.instance.input._orientationAttached, 4, 6);
+    ctx.fillText(Game.instance.input._motionAttached, 4, 6);
 
     ctx.restore();
   }
