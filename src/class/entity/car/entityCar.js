@@ -105,10 +105,9 @@ export class EntityCar extends Entity {
     if (input.isPressed("KeyD")) steer += 1;
 
     const roll = input.getRoll?.() ?? 0;
-    const gyro = Math.abs(roll) < 0.05 ? 0 : roll;
+    const gyro = Math.sign(roll) * (roll * roll);
 
     steer += gyro;
-
     steer = Math.max(-1, Math.min(1, steer));
 
     if (Math.abs(this.speed) > 5) {

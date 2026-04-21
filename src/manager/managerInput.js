@@ -64,51 +64,50 @@ export class ManagerInput {
 
   // ─── MOTION ───────────────────────────────────
   _initMotion() {
+    // Use deviceorientation (tilt angle) not devicemotion (rotation rate)
     this._motionHandler = (e) => {
-      const x = e.rotationRate?.gamma;
-      if (x == null) return;
-      let v = x / 10;
+      // gamma = left/right tilt: negative = tilted left, positive = tilted right
+      // In landscape, this maps cleanly to steering
+      let v = (e.gamma ?? 0) / 45; // 45° = full lock
       v = Math.max(-1, Math.min(1, v));
-      if (Math.abs(v) < 0.05) v = 0;
+      if (Math.abs(v) < 0.08) v = 0; // deadzone
       this.roll = v;
     };
 
     const isIOS =
-      typeof DeviceMotionEvent !== "undefined" &&
-      typeof DeviceMotionEvent.requestPermission === "function";
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function";
 
     if (!isIOS) {
-      window.addEventListener("devicemotion", this._motionHandler);
+      window.addEventListener("deviceorientation", this._motionHandler);
       this._motionAttached = true;
       this._resolveReady();
       return;
     }
 
-    // iOS: must request permission synchronously inside a user gesture
     const attempt = () => {
       const overlay = document.getElementById("startOverlay");
       if (!overlay) {
         setTimeout(attempt, 300);
         return;
       }
-
       overlay.style.display = "flex";
-
-      // Use 'click' instead of 'pointerdown' — more reliable for iOS permission gating
       overlay.addEventListener(
         "click",
         () => {
-          // Call requestPermission immediately — no await before it
-          DeviceMotionEvent.requestPermission()
+          DeviceOrientationEvent.requestPermission()
             .then((result) => {
               if (result === "granted") {
-                window.addEventListener("devicemotion", this._motionHandler);
+                window.addEventListener(
+                  "deviceorientation",
+                  this._motionHandler,
+                );
                 this._motionAttached = true;
               } else {
-                console.warn("Motion permission denied");
+                console.warn("Orientation permission denied");
               }
             })
-            .catch((err) => console.warn("Motion error:", err))
+            .catch((err) => console.warn("Orientation error:", err))
             .finally(() => {
               overlay.style.display = "none";
               this._resolveReady();
