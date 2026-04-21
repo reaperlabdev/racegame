@@ -58,9 +58,8 @@ export class ManagerInput {
   // ─── MOTION ─────────────────────────────────────────────────────────────────
   _initMotion() {
     this._motionHandler = (e) => {
-      const x = e.accelerationIncludingGravity?.x;
+      const x = e.rotationRate?.gamma;
       if (x == null) return;
-      // ~±9.8 m/s² at full tilt — normalise to -1..1, dead zone in centre
       let v = x / 9.8;
       v = Math.max(-1, Math.min(1, v));
       if (Math.abs(v) < 0.05) v = 0;
