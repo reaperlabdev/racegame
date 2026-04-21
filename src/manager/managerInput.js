@@ -67,12 +67,9 @@ export class ManagerInput {
     this._motionHandler = (e) => {
       const x = e.rotationRate?.gamma;
       if (x == null) return;
-
-      let v = x / 10; // smoother scaling
+      let v = x / 10;
       v = Math.max(-1, Math.min(1, v));
-
       if (Math.abs(v) < 0.05) v = 0;
-
       this.roll = v;
     };
 
@@ -87,10 +84,9 @@ export class ManagerInput {
       return;
     }
 
-    // iOS permission
+    // iOS: must request permission synchronously inside a user gesture
     const attempt = () => {
       const overlay = document.getElementById("startOverlay");
-
       if (!overlay) {
         setTimeout(attempt, 300);
         return;
@@ -98,29 +94,29 @@ export class ManagerInput {
 
       overlay.style.display = "flex";
 
+      // Use 'click' instead of 'pointerdown' — more reliable for iOS permission gating
       overlay.addEventListener(
-        "pointerdown",
-        async () => {
-          try {
-            const result = await DeviceMotionEvent.requestPermission();
-
-            if (result === "granted") {
-              window.addEventListener("devicemotion", this._motionHandler);
-              this._motionAttached = true;
-            } else {
-              console.warn("Motion permission denied");
-            }
-          } catch (err) {
-            console.warn("Motion error:", err);
-          }
-
-          overlay.style.display = "none";
-          this._resolveReady();
+        "click",
+        () => {
+          // Call requestPermission immediately — no await before it
+          DeviceMotionEvent.requestPermission()
+            .then((result) => {
+              if (result === "granted") {
+                window.addEventListener("devicemotion", this._motionHandler);
+                this._motionAttached = true;
+              } else {
+                console.warn("Motion permission denied");
+              }
+            })
+            .catch((err) => console.warn("Motion error:", err))
+            .finally(() => {
+              overlay.style.display = "none";
+              this._resolveReady();
+            });
         },
         { once: true },
       );
     };
-
     attempt();
   }
 
