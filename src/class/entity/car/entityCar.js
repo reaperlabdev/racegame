@@ -150,6 +150,10 @@ export class EntityCar extends Entity {
     this.externalVelX *= 0.9;
     this.externalVelY *= 0.9;
 
+    // MAX SPEED 2500 each
+    this.velX = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velX));
+    this.velY = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velY));
+
     const nextX = this.x + this.velX * dt;
     const nextY = this.y + this.velY * dt;
 
