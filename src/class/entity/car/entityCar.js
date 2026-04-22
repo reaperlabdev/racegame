@@ -107,7 +107,6 @@ export class EntityCar extends Entity {
     const gyro = Math.sign(roll) * (roll * roll);
 
     steer += gyro;
-    steer = Math.max(-1, Math.min(1, steer));
 
     if (Math.abs(this.speed) > 5) {
       const direction = this.speed > 0 ? 1 : -1;

@@ -64,11 +64,8 @@ export class ManagerInput {
 
   // ─── MOTION ───────────────────────────────────
   _initMotion() {
-    // Use deviceorientation (tilt angle) not devicemotion (rotation rate)
     this._motionHandler = (e) => {
-      // gamma = left/right tilt: negative = tilted left, positive = tilted right
-      // In landscape, this maps cleanly to steering
-      let v = (e.gamma ?? 0) / 45; // 45° = full lock
+      let v = (e.gamma ?? 0) / 45;
       v = Math.max(-1, Math.min(1, v));
       if (Math.abs(v) < 0.08) v = 0; // deadzone
       this.roll = v;
