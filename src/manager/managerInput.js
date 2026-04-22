@@ -65,7 +65,7 @@ export class ManagerInput {
   // ─── MOTION ───────────────────────────────────
   _initMotion() {
     this._motionHandler = (e) => {
-      let v = (e.gamma ?? 0) / 45;
+      let v = (e.gamma ?? 0) / 90;
       v = Math.max(-1, Math.min(1, v));
       if (Math.abs(v) < 0.08) v = 0; // deadzone
       this.roll = v;
