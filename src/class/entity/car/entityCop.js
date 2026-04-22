@@ -36,10 +36,12 @@ export class EntityCop extends EntityCar {
     const impactSpeed = Math.sqrt(this.velX ** 2 + this.velY ** 2) / 2;
     const impactRatio = impactSpeed / this.maxSpeed;
 
-    const pushStrength = impactSpeed * 1.5;
+    const pushStrength = impactSpeed;
 
     player.externalVelX += nx * pushStrength;
     player.externalVelY += ny * pushStrength;
+    player.velX *= 0.3;
+    player.velY *= 0.3;
 
     const overlap = 10;
     player.x += nx * overlap;
@@ -48,17 +50,12 @@ export class EntityCop extends EntityCar {
     Game.instance.camera.shake(5 * impactRatio, 0.2);
 
     Game.instance.managerAudio.play("hit", {
-      volume: Math.min(1, impactRatio * 1.5),
+      volume: 1,
       rate: 0.8 + Math.random() * 0.4,
     });
 
-    if (impactRatio > this.crashDamageThreshold) {
-      this.selfDestruct();
-    } else {
-      this.velX *= -0.3;
-      this.velY *= -0.3;
-      this.speed *= -0.3;
-    }
+    player.health -= 1;
+    this.selfDestruct();
   }
 
   applySeparation(entities) {
@@ -231,6 +228,7 @@ export class EntityCop extends EntityCar {
 
   selfDestruct() {
     if (this.destroyed) return;
+    Game.instance.globals.score += 1;
     this.destroyed = true;
 
     Game.instance.managerAudio.play("crash", {

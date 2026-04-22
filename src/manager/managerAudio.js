@@ -1,40 +1,46 @@
 export class ManagerAudio {
   constructor() {
-    this.sounds = new Map();
+    this.sounds = new Map(); // { audio, poolSize, volume }
+    this.pools = new Map(); // name → Audio[]
+    this.poolIndex = new Map(); // name → current index
     this.music = null;
   }
 
-  load(name, src, { loop = false, volume = 1 } = {}) {
-    const audio = new Audio(src);
-    audio.loop = loop;
-    audio.volume = volume;
-
-    this.sounds.set(name, audio);
+  load(name, src, { loop = false, volume = 1, pool = 4 } = {}) {
+    const instances = Array.from({ length: pool }, () => {
+      const a = new Audio(src);
+      a.loop = loop;
+      a.volume = volume;
+      return a;
+    });
+    this.sounds.set(name, { volume, loop });
+    this.pools.set(name, instances);
+    this.poolIndex.set(name, 0);
   }
 
   play(name, { volume, rate } = {}) {
-    const sound = this.sounds.get(name);
-    if (!sound) return;
+    const pool = this.pools.get(name);
+    if (!pool) return;
 
-    const clone = sound.cloneNode(); // allows overlapping sounds
-    if (volume !== undefined) clone.volume = volume;
-    if (rate !== undefined) clone.playbackRate = rate;
+    const i = this.poolIndex.get(name);
+    const sound = pool[i];
 
-    clone.play();
+    this.poolIndex.set(name, (i + 1) % pool.length);
+
+    sound.currentTime = 0;
+    if (volume !== undefined) sound.volume = volume;
+    if (rate !== undefined) sound.playbackRate = rate;
+    sound.play().catch(() => {}); // suppress AbortError on rapid calls
   }
 
   playLoop(name) {
-    const sound = this.sounds.get(name);
-    if (!sound) return;
-
-    if (this.music) {
-      this.music.pause();
-    }
-
-    this.music = sound;
+    const pool = this.pools.get(name);
+    if (!pool) return;
+    if (this.music) this.music.pause();
+    this.music = pool[0];
     this.music.currentTime = 0;
     this.music.loop = true;
-    this.music.play();
+    this.music.play().catch(() => {});
   }
 
   stopMusic() {

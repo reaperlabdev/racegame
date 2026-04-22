@@ -3,6 +3,8 @@ import { Entity } from "../classEntity.js";
 import { EntitySkidmark } from "../effects/skidmark/entitySkidMark.js";
 
 export class EntityCar extends Entity {
+  health = 3;
+
   angle = -Math.PI / 2;
   speed = 0;
   maxSpeed = 600;
@@ -81,14 +83,22 @@ export class EntityCar extends Entity {
     }
 
     // ACCELERATION (MOBILE + KEYBOARD)
-    if (!isBrake) {
-      if (isGas) {
-        this.speed += this.acceleration * dt;
-      } else {
-        if (input.isPressed("KeyW")) this.speed += this.acceleration * dt;
-        else if (input.isPressed("KeyS")) this.speed -= this.acceleration * dt;
-      }
+    // ACCELERATION (MOBILE + KEYBOARD)
+    if (isGas) {
+      this.speed += this.acceleration * dt;
+    } else if (input.isPressed("KeyW")) {
+      this.speed += this.acceleration * dt;
+    } else if (
+      input.isPressed("KeyS") ||
+      (isBrake && Math.abs(this.speed) < 20)
+    ) {
+      this.speed -= this.acceleration * dt;
     }
+    // SPEED CAP (no full-speed reversing)
+    this.speed = Math.max(
+      -this.maxSpeed * 0.3,
+      Math.min(this.maxSpeed, this.speed),
+    );
 
     let currentTurnSpeed = this.turnSpeed;
     let currentDrift = isBrake ? 0.98 : surfaceDrift;
@@ -98,6 +108,7 @@ export class EntityCar extends Entity {
       this.speed *= 0.99;
     }
 
+    // STEERING (keyboard + gyro)
     let steer = 0;
 
     if (input.isPressed("KeyA")) steer -= 1;
@@ -110,11 +121,10 @@ export class EntityCar extends Entity {
       (gyro * 1.25 - this._smoothSteer) * (1 - Math.pow(0.02, dt));
 
     steer += this._smoothSteer;
+
     if (Math.abs(this.speed) > 5) {
       const direction = this.speed > 0 ? 1 : -1;
-
       const speedFactor = Math.min(1, Math.abs(this.speed) / this.maxSpeed);
-
       const steerScale = 1 - speedFactor * 0.5;
 
       if (isBrake) steer *= 1.3;
@@ -152,9 +162,9 @@ export class EntityCar extends Entity {
           const impact = Math.abs(this.velX) / this.maxSpeed;
           Game.instance.camera.shake(10 * impact, 0.2);
         }
-
-        this.speed *= -1;
-        this.velX *= -1;
+        this.velX *= -0.6;
+        this.speed = this.velX / Math.cos(this.angle) || -this.speed * 0.6;
+        this.externalVelX += this.velX * 0.4;
       } else {
         this.x = nextX;
       }
@@ -168,9 +178,9 @@ export class EntityCar extends Entity {
           const impact = Math.abs(this.velY) / this.maxSpeed;
           Game.instance.camera.shake(10 * impact, 0.2);
         }
-
-        this.speed *= -1;
-        this.velY *= -1;
+        this.velY *= -0.6;
+        this.speed = this.velY / Math.sin(this.angle) || -this.speed * 0.6;
+        this.externalVelY += this.velY * 0.4;
       } else {
         this.y = nextY;
       }
@@ -222,7 +232,6 @@ export class EntityCar extends Entity {
 
     for (const t of tires) {
       const rx = t.x * Math.cos(this.angle) - t.y * Math.sin(this.angle);
-
       const ry = t.x * Math.sin(this.angle) + t.y * Math.cos(this.angle);
 
       Game.instance.managerEntity.addEntity(
@@ -242,7 +251,15 @@ export class EntityCar extends Entity {
     ctx.fillStyle = "rgba(255,255,255,0.7)";
     ctx.fillRect(4, -6, 4, 12);
 
-    ctx.fillText(Game.instance.input._motionAttached, 4, 6);
+    const hp = "♥ ".repeat(this.health).trim();
+    const x = 0;
+    const y = this.height / 2 + 12;
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "black";
+    ctx.fillText(hp, x + 1, y + 1);
+    ctx.fillStyle = "red";
+    ctx.fillText(hp, x, y);
 
     ctx.restore();
   }

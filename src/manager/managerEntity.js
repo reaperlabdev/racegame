@@ -1,5 +1,6 @@
 export class ManagerEntity {
   entities = [];
+  paused = false;
 
   addEntity(entity) {
     console.log("adding ", entity);
@@ -19,6 +20,7 @@ export class ManagerEntity {
   }
 
   updateEntities(dt) {
+    if (this.paused) return;
     this.entities.forEach((entity) => entity.update(dt));
     this.entities = this.entities.filter((entity) => !entity.destroyed);
   }

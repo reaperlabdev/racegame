@@ -1,7 +1,9 @@
 import { Camera } from "./class/camera/classCamera.js";
 import { EntityCar } from "./class/entity/car/entityCar.js";
+import { HudBase } from "./class/hud/base/hudBase.js";
 import { ManagerAudio } from "./manager/managerAudio.js";
 import { ManagerEntity } from "./manager/managerEntity.js";
+import { ManagerHud } from "./manager/managerHud.js";
 import { ManagerInput } from "./manager/managerInput.js";
 import { ManagerMap } from "./manager/managerMap.js";
 import { ManagerSpawner } from "./manager/managerSpawner.js";
@@ -11,11 +13,16 @@ export class Game {
 
   camera = new Camera();
   managerMap = new ManagerMap();
+  managerHud = new ManagerHud();
   managerEntity = new ManagerEntity();
   input = new ManagerInput();
 
   canvas = document.getElementById("gameCanvas");
   ctx = this.canvas.getContext("2d");
+
+  globals = {
+    score: 0,
+  };
 
   lastTime = 0;
 
@@ -45,8 +52,13 @@ export class Game {
   }
 
   init() {
+    const baseHud = new HudBase();
+    this.managerHud.addHud(baseHud);
+
     const car = new EntityCar();
     this.managerEntity.addEntity(car);
+
+    this.globals.score = 0;
 
     console.log("add");
     requestAnimationFrame((t) => {
@@ -59,11 +71,24 @@ export class Game {
     const dt = (time - this.lastTime) / 1000;
     this.lastTime = time;
 
+    if (time > 1) {
+      time = 0;
+    }
+
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     this.update(dt);
     this.render(this.ctx);
+
+    const entities = this.managerEntity.entities;
+    const player = entities.find((e) => e instanceof EntityCar);
+    if (player) {
+      const health = player.health;
+      if (health <= 0) {
+        this.managerEntity.paused = true;
+      }
+    }
 
     requestAnimationFrame((t) => this.loop(t));
   }
@@ -72,6 +97,7 @@ export class Game {
     this.copSpawner.update(dt);
     this.camera.update(dt);
     this.managerMap.update(dt);
+    this.managerHud.update(dt);
     this.managerEntity.updateEntities(dt);
   }
 
@@ -80,6 +106,7 @@ export class Game {
 
     this.managerMap.render(this.ctx, 0, 0);
     this.managerEntity.renderEntities(this.ctx);
+    this.managerHud.render(this.ctx);
   }
 }
 
