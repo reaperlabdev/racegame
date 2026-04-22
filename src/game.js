@@ -68,26 +68,20 @@ export class Game {
   }
 
   loop(time) {
-    const dt = (time - this.lastTime) / 1000;
+    let dt = (time - this.lastTime) / 1000;
     this.lastTime = time;
 
-    if (time > 1) {
-      time = 0;
-    }
+    dt = Math.min(dt, 1 / 30);
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
     this.update(dt);
     this.render(this.ctx);
 
     const entities = this.managerEntity.entities;
     const player = entities.find((e) => e instanceof EntityCar);
-    if (player) {
-      const health = player.health;
-      if (health <= 0) {
-        this.managerEntity.paused = true;
-      }
+    if (player && player.health <= 0) {
+      this.managerEntity.paused = true;
     }
 
     requestAnimationFrame((t) => this.loop(t));
