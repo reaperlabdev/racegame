@@ -20,6 +20,7 @@ export class EntityCar extends Entity {
   _spawnResolved = false;
   _wasCollidingX = false;
   _wasCollidingY = false;
+  _smoothSteer = 0;
 
   constructor() {
     super(320, 320);
@@ -97,7 +98,6 @@ export class EntityCar extends Entity {
       this.speed *= 0.99;
     }
 
-    // STEERING (keyboard + gyro)
     let steer = 0;
 
     if (input.isPressed("KeyA")) steer -= 1;
@@ -106,8 +106,10 @@ export class EntityCar extends Entity {
     const roll = input.getRoll?.() ?? 0;
     const gyro = Math.sign(roll) * (roll * roll);
 
-    steer += gyro * 1.25;
+    this._smoothSteer +=
+      (gyro * 1.25 - this._smoothSteer) * (1 - Math.pow(0.02, dt));
 
+    steer += this._smoothSteer;
     if (Math.abs(this.speed) > 5) {
       const direction = this.speed > 0 ? 1 : -1;
 
