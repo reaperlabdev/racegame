@@ -7,6 +7,7 @@ export class EntityCar extends Entity {
 
   angle = -Math.PI / 2;
   speed = 0;
+  maxVel = 2500;
   maxSpeed = 600;
   acceleration = 800;
   friction = 0.98;
@@ -151,8 +152,8 @@ export class EntityCar extends Entity {
     this.externalVelY *= 0.9;
 
     // MAX SPEED 2500 each
-    this.velX = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velX));
-    this.velY = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velY));
+    this.velX = Math.max(-this.maxVel, Math.min(this.maxVel, this.velX));
+    this.velY = Math.max(-this.maxVel, Math.min(this.maxVel, this.velY));
 
     const nextX = this.x + this.velX * dt;
     const nextY = this.y + this.velY * dt;
