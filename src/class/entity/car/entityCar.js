@@ -7,12 +7,12 @@ export class EntityCar extends Entity {
 
   angle = -Math.PI / 2;
   speed = 0;
-  maxVel = 2500;
+  maxVel = 800;
   maxSpeed = 600;
-  acceleration = 800;
+  acceleration = 600;
   friction = 0.98;
   turnSpeed = 2.2;
-  driftFactor = 0.92;
+  driftFactor = 0.9;
 
   externalVelX = 0;
   externalVelY = 0;
@@ -51,43 +51,31 @@ export class EntityCar extends Entity {
   }
 
   update(dt) {
+    dt = Math.min(dt, 0.033);
+
     if (!this._spawnResolved) {
       this.resolveSpawnCollision();
     }
 
     const input = Game.instance.input;
-
     const isGas = input.isGas();
     const isBrake = input.isBrake();
 
     const currentMap = Game.instance.managerMap.maps[0];
 
-    // CAMERA ZOOM
     const speedRatio = Math.abs(this.speed) / this.maxSpeed;
-    const targetZoom = 2 - speedRatio * 1;
+    const targetZoom = 2.75 - speedRatio * 1;
+    const zoomLerp = 1 - Math.pow(0.95, dt * 60);
 
     Game.instance.camera.setZoom(
       Game.instance.camera.zoom +
-        (targetZoom - Game.instance.camera.zoom) * 0.05,
+        (targetZoom - Game.instance.camera.zoom) * zoomLerp,
     );
 
-    // SURFACE SETTINGS
     let surfaceFriction = this.friction;
     let surfaceDrift = this.driftFactor;
 
-    if (currentMap) {
-      const tile = currentMap.getTileAt(this.x, this.y);
-      if (tile.id === 2) {
-        surfaceFriction = 0.94;
-        surfaceDrift = 0.97;
-      }
-    }
-
-    // ACCELERATION (MOBILE + KEYBOARD)
-    // ACCELERATION (MOBILE + KEYBOARD)
-    if (isGas) {
-      this.speed += this.acceleration * dt;
-    } else if (input.isPressed("KeyW")) {
+    if (isGas || input.isPressed("KeyW")) {
       this.speed += this.acceleration * dt;
     } else if (
       input.isPressed("KeyS") ||
@@ -95,7 +83,7 @@ export class EntityCar extends Entity {
     ) {
       this.speed -= this.acceleration * dt;
     }
-    // SPEED CAP (no full-speed reversing)
+
     this.speed = Math.max(
       -this.maxSpeed * 0.3,
       Math.min(this.maxSpeed, this.speed),
@@ -106,10 +94,10 @@ export class EntityCar extends Entity {
 
     if (isBrake) {
       currentTurnSpeed *= 0.8;
-      this.speed *= 0.99;
+      this.speed *= Math.pow(0.99, dt * 60);
     }
 
-    // STEERING (keyboard + gyro)
+    // 🎮 STEERING
     let steer = 0;
 
     if (input.isPressed("KeyA")) steer -= 1;
@@ -133,32 +121,39 @@ export class EntityCar extends Entity {
       this.angle += steer * currentTurnSpeed * steerScale * dt * direction;
     }
 
-    // FRICTION
-    this.speed *= surfaceFriction;
+    this.speed *= Math.pow(surfaceFriction, dt * 60);
 
-    // TARGET VELOCITY
     const targetVelX = Math.cos(this.angle) * this.speed;
     const targetVelY = Math.sin(this.angle) * this.speed;
 
-    // DRIFT BLEND
-    this.velX += (targetVelX - this.velX) * (1 - currentDrift);
-    this.velY += (targetVelY - this.velY) * (1 - currentDrift);
+    // 🛞 DRIFT (fixed)
+    const driftLerp = 1 - Math.pow(currentDrift, dt * 60);
 
-    // EXTERNAL FORCES
+    this.velX += (targetVelX - this.velX) * driftLerp;
+    this.velY += (targetVelY - this.velY) * driftLerp;
+
+    // 💥 EXTERNAL FORCES (fixed)
     this.velX += this.externalVelX;
     this.velY += this.externalVelY;
 
-    this.externalVelX *= 0.9;
-    this.externalVelY *= 0.9;
+    this.externalVelX *= (Math.pow(0.9, dt * 60) * surfaceFriction) / 2;
+    this.externalVelY *= (Math.pow(0.9, dt * 60) * surfaceFriction) / 2;
 
-    // MAX SPEED 2500 each
+    this.externalVelX = Math.max(
+      -this.maxVel,
+      Math.min(this.maxVel, this.externalVelX),
+    );
+    this.externalVelY = Math.max(
+      -this.maxVel,
+      Math.min(this.maxVel, this.externalVelY),
+    );
+
     this.velX = Math.max(-this.maxVel, Math.min(this.maxVel, this.velX));
     this.velY = Math.max(-this.maxVel, Math.min(this.maxVel, this.velY));
 
     const nextX = this.x + this.velX * dt;
     const nextY = this.y + this.velY * dt;
 
-    // COLLISION
     if (currentMap) {
       const collidingX = this.checkCollision(nextX, this.y, currentMap);
 
@@ -193,7 +188,7 @@ export class EntityCar extends Entity {
       this._wasCollidingY = collidingY;
     }
 
-    // SKIDMARKS
+    // 🛑 SKIDMARKS
     const driftIntensity = Math.sqrt(
       (targetVelX - this.velX) ** 2 + (targetVelY - this.velY) ** 2,
     );
@@ -202,7 +197,7 @@ export class EntityCar extends Entity {
       this.spawnSkidmarks();
     }
 
-    // CAMERA
+    // 🎥 CAMERA FOLLOW
     Game.instance.camera.setPosition(this.x, this.y);
     Game.instance.camera.setRotation(this.angle + Math.PI / 2);
   }

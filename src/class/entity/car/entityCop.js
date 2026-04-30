@@ -58,6 +58,22 @@ export class EntityCop extends EntityCar {
     this.selfDestruct();
   }
 
+  handleCopCollision(entities) {
+    if (this.destroyed) return;
+
+    for (const e of entities) {
+      if (e === this) continue;
+      if (!(e instanceof EntityCop)) continue;
+      if (e.destroyed) continue;
+
+      if (this.isCollidingWith(e)) {
+        e.selfDestruct();
+        this.selfDestruct();
+        return;
+      }
+    }
+  }
+
   applySeparation(entities) {
     let avoidX = 0;
     let avoidY = 0;
@@ -118,6 +134,8 @@ export class EntityCop extends EntityCar {
     if (player) {
       this.handlePlayerCollision(player);
     }
+
+    this.handleCopCollision(entities);
 
     let currentDrift = this.copDriftFactor;
     let effectiveTurnSpeed = this.turnSpeed;
