@@ -2,7 +2,7 @@
   "name": "Race Game",
   "short_name": "RaceGame",
   "description": "A mobile racing game",
-  "start_url": "/",
+  "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#000000",
